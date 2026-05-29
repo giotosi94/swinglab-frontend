@@ -130,7 +130,83 @@ function App() {
       trade: { entry: Math.round(entry * 100) / 100, stopLoss: Math.round(stopLoss * 100) / 100, target1: Math.round(target1 * 100) / 100, target2: Math.round(target2 * 100) / 100, riskReward, riskPerShare: Math.round(riskPerShare * 100) / 100, rewardPerShare: Math.round(rewardPerShare * 100) / 100 },
     };
   };
+// ============================================
+  // BOTTOM DETECTION ENGINE
+  // ============================================
+  const getBottomSignal = (asset) => {
+    const factors = [];
+    let score = 0;
 
+    // 1. RSI Oversold (+3 or +2)
+    if (asset.rsi <= 30) { score += 3; factors.push({ name: 'RSI Extreme Oversold', score: 3, detail: `RSI ${asset.rsi?.toFixed(1)} (< 30)`, pass: true }); }
+    else if (asset.rsi <= 40) { score += 2; factors.push({ name: 'RSI Low Zone', score: 2, detail: `RSI ${asset.rsi?.toFixed(1)} (30-40)`, pass: true }); }
+    else { factors.push({ name: 'RSI Oversold', score: 0, detail: `RSI ${asset.rsi?.toFixed(1)}`, pass: false }); }
+
+    // 2. Near Value Area Low (+2)
+    if (asset.value_area_low && asset.price) {
+      const vaLowDist = ((asset.price - asset.value_area_low) / asset.price * 100);
+      if (vaLowDist <= 2 && vaLowDist >= -5) { score += 2; factors.push({ name: 'Near VA Low', score: 2, detail: `${vaLowDist.toFixed(1)}% from VA Low $${asset.value_area_low}`, pass: true }); }
+      else { factors.push({ name: 'Near VA Low', score: 0, detail: `${vaLowDist.toFixed(1)}% from VA Low`, pass: false }); }
+    }
+
+    // 3. Near 52W Low (+1.5)
+    if (asset.low_52w && asset.price) {
+      const lowDist = ((asset.price - asset.low_52w) / asset.low_52w * 100);
+      if (lowDist <= 15) { score += 1.5; factors.push({ name: 'Near 52W Low', score: 1.5, detail: `${lowDist.toFixed(1)}% above 52W Low $${asset.low_52w}`, pass: true }); }
+      else { factors.push({ name: 'Near 52W Low', score: 0, detail: `${lowDist.toFixed(1)}% above 52W Low`, pass: false }); }
+    }
+
+    // 4. Bullish Reversal Pattern (+2)
+    const bullishReversals = (asset.candlestick_patterns || []).filter(p => p.type === 'bullish' && (p.name === 'Hammer' || p.name === 'Morning Star' || p.name === 'Bullish Engulfing'));
+    if (bullishReversals.length > 0) { score += 2; factors.push({ name: 'Bullish Reversal', score: 2, detail: bullishReversals.map(p => p.name).join(', '), pass: true }); }
+    else { factors.push({ name: 'Bullish Reversal', score: 0, detail: 'No reversal pattern', pass: false }); }
+
+    // 5. Volume Spike (+1)
+    if (asset.relative_volume >= 1.5) { score += 1; factors.push({ name: 'Volume Spike', score: 1, detail: `${asset.relative_volume?.toFixed(2)}x (capitulation?)`, pass: true }); }
+    else { factors.push({ name: 'Volume Spike', score: 0, detail: `${asset.relative_volume?.toFixed(2)}x`, pass: false }); }
+
+    // 6. MACD Turning (+1)
+    if (asset.macd && asset.macd.histogram < 0 && asset.macd.histogram > asset.macd.signal * 0.5) { score += 1; factors.push({ name: 'MACD Turning', score: 1, detail: `Histogram ${asset.macd.histogram.toFixed(4)} (improving)`, pass: true }); }
+    else if (asset.macd && asset.macd.histogram < 0) { factors.push({ name: 'MACD Turning', score: 0, detail: `Histogram ${asset.macd?.histogram?.toFixed(4)}`, pass: false }); }
+    else { factors.push({ name: 'MACD Turning', score: 0, detail: 'MACD positive (no bottom)', pass: false }); }
+
+    // 7. Below EMA50 (+0.5)
+    if (asset.price < asset.ema50) { score += 0.5; factors.push({ name: 'Below EMA50', score: 0.5, detail: `Price $${asset.price?.toFixed(2)} < EMA50 $${asset.ema50?.toFixed(2)}`, pass: true }); }
+    else { factors.push({ name: 'Below EMA50', score: 0, detail: 'Price above EMA50', pass: false }); }
+
+    score = Math.round(score * 10) / 10;
+
+    let level, color, bg, icon;
+    if (score >= 7) { level = 'STRONG BOTTOM'; color = '#ef4444'; bg = '#ef444420'; icon = '🔴'; }
+    else if (score >= 5) { level = 'POTENTIAL BOTTOM'; color = '#f97316'; bg = '#f9731620'; icon = '🟠'; }
+    else if (score >= 3) { level = 'APPROACHING'; color = '#eab308'; bg = '#eab30820'; icon = '🟡'; }
+    else { level = 'NO SIGNAL'; color = '#64748b'; bg = '#64748b20'; icon = '⚪'; }
+
+    // Recovery targets
+    const recoveryTarget1 = asset.poc_price || (asset.price * 1.05);
+    const recoveryTarget2 = asset.value_area_high || (asset.price * 1.10);
+    const stopLoss = asset.low_52w ? asset.low_52w * 0.97 : asset.price * 0.95;
+
+    return { score, maxScore: 10, level, color, bg, icon, factors, trade: { entry: asset.price, stopLoss: Math.round(stopLoss * 100) / 100, target1: Math.round(recoveryTarget1 * 100) / 100, target2: Math.round(recoveryTarget2 * 100) / 100 } };
+  };
+
+  // Bottom stocks
+  const bottomStocks = assets.map(a => ({ ...a, bottom: getBottomSignal(a) })).filter(a => a.bottom.score >= 3).sort((a, b) => b.bottom.score - a.bottom.score);
+
+  // Bottom sectors
+  const bottomSectors = sectors.map(s => {
+    const sectorAssets = assets.filter(a => a.sector_code === s.code);
+    const avgRsi = sectorAssets.length > 0 ? sectorAssets.reduce((sum, a) => sum + (a.rsi || 50), 0) / sectorAssets.length : 50;
+    const bottomCount = sectorAssets.filter(a => getBottomSignal(a).score >= 3).length;
+    let sectorBottomScore = 0;
+    if (avgRsi < 35) sectorBottomScore += 3;
+    else if (avgRsi < 45) sectorBottomScore += 1.5;
+    if (s.strength_score < -5) sectorBottomScore += 2;
+    if (s.rsi < 40) sectorBottomScore += 2;
+    if (bottomCount >= 3) sectorBottomScore += 2;
+    else if (bottomCount >= 1) sectorBottomScore += 1;
+    return { ...s, avgRsi: Math.round(avgRsi * 10) / 10, bottomCount, sectorBottomScore: Math.round(sectorBottomScore * 10) / 10, totalStocks: sectorAssets.length };
+  }).filter(s => s.sectorBottomScore >= 2).sort((a, b) => b.sectorBottomScore - a.sectorBottomScore);
   const sectorChartData = sectors.map(s => ({ name: s.code, score: s.composite_score, fill: getScoreColor(s.composite_score) }));
   const setupCounts = {};
   assets.forEach(a => { setupCounts[a.setup_type] = (setupCounts[a.setup_type] || 0) + 1; });
@@ -271,11 +347,12 @@ function App() {
           <div><h1 style={{margin:0, fontSize:22, fontWeight:700, color:'#f1f5f9'}}>SwingLab</h1><p style={{margin:0, fontSize:12, color:'#64748b'}}>Swing Trading Analysis</p></div>
         </div>
         <div style={{display:'flex', gap:8}}>
-          {['dashboard','alerts','poc','scanner','sectors'].map(v => (
+          {['dashboard','alerts','bottoms','poc','scanner','sectors'].map(v => (
             <button key={v} onClick={() => {setView(v); setSelectedSector(null);}}
               style={{background: view===v ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13, position:'relative'}}>
-              {v === 'dashboard' ? 'Dashboard' : v === 'alerts' ? 'Alerts' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : 'Sectors'}
+              {v === 'dashboard' ? 'Dashboard' : v === 'alerts' ? 'Alerts' : v === 'bottoms' ? 'Bottoms' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : 'Sectors'}
               {v === 'alerts' && smartAlerts.length > 0 && <span style={{position:'absolute', top:-4, right:-4, background:'#ef4444', color:'white', borderRadius:'50%', width:18, height:18, fontSize:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700}}>{smartAlerts.length}</span>}
+              {v === 'bottoms' && bottomStocks.length > 0 && <span style={{position:'absolute', top:-4, right:-4, background:'#f97316', color:'white', borderRadius:'50%', width:18, height:18, fontSize:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700}}>{bottomStocks.length}</span>}
             </button>
           ))}
         </div>
@@ -456,7 +533,109 @@ function App() {
             )}
           </>
         )}
-
+{/* BOTTOMS DETECTOR */}
+        {view === 'bottoms' && (
+          <>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:8}}>
+              <div>
+                <h2 style={{fontSize:20, fontWeight:700, margin:0}}>Bottom Detector</h2>
+                <p style={{color:'#94a3b8', margin:'4px 0 0', fontSize:14}}>Stocks and sectors showing signs of bottoming - potential reversal plays</p>
+              </div>
+              <div style={{display:'flex', gap:12}}>
+                <div style={{background:'#ef444420', borderRadius:8, padding:'8px 16px', textAlign:'center'}}><p style={{color:'#ef4444', fontSize:22, fontWeight:700, margin:0}}>{bottomStocks.filter(a => a.bottom.score >= 7).length}</p><p style={{color:'#94a3b8', fontSize:11, margin:0}}>STRONG</p></div>
+                <div style={{background:'#f9731620', borderRadius:8, padding:'8px 16px', textAlign:'center'}}><p style={{color:'#f97316', fontSize:22, fontWeight:700, margin:0}}>{bottomStocks.filter(a => a.bottom.score >= 5).length}</p><p style={{color:'#94a3b8', fontSize:11, margin:0}}>POTENTIAL</p></div>
+                <div style={{background:'#eab30820', borderRadius:8, padding:'8px 16px', textAlign:'center'}}><p style={{color:'#eab308', fontSize:22, fontWeight:700, margin:0}}>{bottomStocks.length}</p><p style={{color:'#94a3b8', fontSize:11, margin:0}}>TOTAL</p></div>
+              </div>
+            </div>
+            {bottomSectors.length > 0 && (
+              <div style={{marginBottom:24}}>
+                <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Sector Bottoms</h3>
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12}}>
+                  {bottomSectors.map(s => (
+                    <div key={s.code} onClick={() => {setSelectedSector(s.code); setView('scanner');}} style={{background:'#1e293b', borderRadius:12, padding:16, cursor:'pointer', border:'1px solid #f9731640'}} onMouseOver={e => e.currentTarget.style.borderColor='#f97316'} onMouseOut={e => e.currentTarget.style.borderColor='#f9731640'}>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+                        <span style={{fontWeight:700, fontSize:16}}>{s.code}</span>
+                        <span style={{background: s.sectorBottomScore >= 6 ? '#ef444420' : '#f9731620', color: s.sectorBottomScore >= 6 ? '#ef4444' : '#f97316', padding:'4px 10px', borderRadius:12, fontSize:12, fontWeight:700}}>{s.sectorBottomScore}/10</span>
+                      </div>
+                      <p style={{fontSize:12, color:'#94a3b8', margin:'0 0 8px'}}>{s.name}</p>
+                      <div style={{display:'flex', justifyContent:'space-between', fontSize:12}}>
+                        <span style={{color:'#ef4444'}}>RSI {s.rsi?.toFixed(0)}</span>
+                        <span style={{color:'#94a3b8'}}>Avg RSI {s.avgRsi}</span>
+                        <span style={{color:'#f97316'}}>{s.bottomCount} bottoms</span>
+                      </div>
+                      <div style={{marginTop:8, background:'#334155', borderRadius:4, height:6, overflow:'hidden'}}>
+                        <div style={{width:`${(s.sectorBottomScore/10)*100}%`, height:'100%', borderRadius:4, background: s.sectorBottomScore >= 6 ? '#ef4444' : '#f97316'}} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Stock Bottoms</h3>
+            {bottomStocks.length === 0 ? (
+              <div style={{background:'#1e293b', borderRadius:12, padding:40, textAlign:'center'}}><p style={{fontSize:48}}>📈</p><p style={{fontSize:18, color:'#94a3b8'}}>No bottom signals detected. Market is healthy!</p></div>
+            ) : (
+              <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(380px, 1fr))', gap:16}}>
+                {bottomStocks.map(a => {
+                  const bot = a.bottom;
+                  const sector = sectors.find(s => s.code === a.sector_code);
+                  const passCount = bot.factors.filter(f => f.pass).length;
+                  return (
+                    <div key={a.ticker} onClick={() => setSelectedStock(a)} style={{background:'#1e293b', borderRadius:16, padding:20, cursor:'pointer', border: bot.score >= 7 ? '2px solid #ef4444' : bot.score >= 5 ? '2px solid #f97316' : '1px solid #334155', transition:'all 0.2s'}} onMouseOver={e => e.currentTarget.style.transform='translateY(-2px)'} onMouseOut={e => e.currentTarget.style.transform='translateY(0)'}>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+                        <div style={{display:'flex', alignItems:'center', gap:8}}>
+                          <span style={{fontSize:20, fontWeight:700}}>{a.ticker}</span>
+                          <span style={{color:'#94a3b8', fontSize:12}}>{sector?.name || a.sector_code}</span>
+                        </div>
+                        <span style={{background:bot.bg, color:bot.color, padding:'6px 14px', borderRadius:20, fontWeight:700, fontSize:14}}>{bot.icon} {bot.level}</span>
+                      </div>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+                        <div>
+                          <p style={{fontSize:28, fontWeight:700, margin:0}}>${a.price?.toFixed(2)}</p>
+                          <p style={{color: a.change_pct >= 0 ? '#22c55e' : '#ef4444', margin:'4px 0 0', fontWeight:600}}>{a.change_pct >= 0 ? '+' : ''}{a.change_pct?.toFixed(2)}%</p>
+                          {a.low_52w && <p style={{color:'#94a3b8', fontSize:11, margin:'2px 0 0'}}>52W Low: ${a.low_52w}</p>}
+                        </div>
+                        <div style={{textAlign:'center'}}>
+                          <div style={{width:70, height:70, borderRadius:'50%', border:`5px solid ${bot.color}`, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
+                            <span style={{fontWeight:700, fontSize:22, color:bot.color}}>{bot.score}</span>
+                            <span style={{fontSize:8, color:'#94a3b8'}}>/10</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{background:'#334155', borderRadius:6, height:8, marginBottom:12, overflow:'hidden'}}>
+                        <div style={{width:`${(bot.score/10)*100}%`, height:'100%', borderRadius:6, background: bot.score >= 7 ? '#ef4444' : bot.score >= 5 ? '#f97316' : '#eab308'}} />
+                      </div>
+                      <div style={{display:'flex', gap:4, marginBottom:12}}>
+                        {bot.factors.map((f, i) => (
+                          <div key={i} title={`${f.name}: ${f.detail}`} style={{flex:1, height:24, borderRadius:4, background: f.pass ? '#f9731630' : '#64748b15', display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, color: f.pass ? '#f1f5f9' : '#475569', fontWeight:600}}>
+                            {f.pass ? f.name.split(' ')[0] : ''}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{background:'#0f172a', borderRadius:10, padding:12, marginBottom:12}}>
+                        <p style={{fontSize:11, color:'#64748b', margin:'0 0 8px'}}>Recovery Targets</p>
+                        <div style={{display:'flex', gap:8, fontSize:11, flexWrap:'wrap'}}>
+                          <span style={{background:'#ef444420', color:'#ef4444', padding:'4px 8px', borderRadius:6}}>Stop ${bot.trade.stopLoss}</span>
+                          <span style={{background:'#3b82f620', color:'#3b82f6', padding:'4px 8px', borderRadius:6}}>Entry ${bot.trade.entry?.toFixed(2)}</span>
+                          <span style={{background:'#22c55e20', color:'#22c55e', padding:'4px 8px', borderRadius:6}}>T1 ${bot.trade.target1} (POC)</span>
+                          <span style={{background:'#8b5cf620', color:'#8b5cf6', padding:'4px 8px', borderRadius:6}}>T2 ${bot.trade.target2} (VA High)</span>
+                        </div>
+                      </div>
+                      <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+                        {getSetupBadge(a.setup_type)}
+                        <span style={{background:'#64748b20', color:'#94a3b8', padding:'2px 8px', borderRadius:12, fontSize:10}}>RSI {a.rsi?.toFixed(0)}</span>
+                        <span style={{background:'#64748b20', color:'#94a3b8', padding:'2px 8px', borderRadius:12, fontSize:10}}>{passCount}/7 factors</span>
+                        {a.candlestick_patterns && a.candlestick_patterns.filter(p => p.type === 'bullish').map((p, pi) => (
+                          <span key={pi} style={{background:'#22c55e20', color:'#22c55e', padding:'2px 8px', borderRadius:12, fontSize:10}}>{p.name}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
         {/* POC SCANNER */}
         {view === 'poc' && (() => {
           const pocStocks = [...assets].filter(a => a.poc_price && a.price).map(a => ({...a, poc_distance: Math.abs(((a.price - a.poc_price) / a.price) * 100), poc_position: a.price >= a.poc_price ? 'above' : 'below'})).sort((a, b) => a.poc_distance - b.poc_distance);
