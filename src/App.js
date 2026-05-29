@@ -245,10 +245,6 @@ function App() {
               style={{background: view===v ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13}}>
               {v === 'dashboard' ? 'Dashboard' : v === 'signals' ? 'Signals' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : 'Sectors'}
             </button>
-            <button key={v} onClick={() => {setView(v); setSelectedSector(null);}}
-              style={{background: view===v ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13}}>
-              {v === 'dashboard' ? 'Dashboard' : v === 'signals' ? 'Signals' : v === 'scanner' ? 'Scanner' : 'Sectors'}
-            </button>
           ))}
         </div>
       </header>
