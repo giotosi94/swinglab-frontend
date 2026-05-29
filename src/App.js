@@ -240,7 +240,11 @@ function App() {
           </div>
         </div>
         <div style={{display:'flex', gap:8}}>
-          {['dashboard','signals','scanner','sectors'].map(v => (
+          {['dashboard','signals','poc','scanner','sectors'].map(v => (
+            <button key={v} onClick={() => {setView(v); setSelectedSector(null);}}
+              style={{background: view===v ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13}}>
+              {v === 'dashboard' ? 'Dashboard' : v === 'signals' ? 'Signals' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : 'Sectors'}
+            </button>
             <button key={v} onClick={() => {setView(v); setSelectedSector(null);}}
               style={{background: view===v ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13}}>
               {v === 'dashboard' ? 'Dashboard' : v === 'signals' ? 'Signals' : v === 'scanner' ? 'Scanner' : 'Sectors'}
@@ -430,7 +434,157 @@ function App() {
             )}
           </>
         )}
+        {/* ========== POC SCANNER VIEW ========== */}
+        {view === 'poc' && (() => {
+          const pocStocks = [...assets]
+            .filter(a => a.poc_price && a.price)
+            .map(a => ({
+              ...a,
+              poc_distance: Math.abs(((a.price - a.poc_price) / a.price) * 100),
+              poc_position: a.price >= a.poc_price ? 'above' : 'below',
+            }))
+            .sort((a, b) => a.poc_distance - b.poc_distance);
 
+          const nearPoc = pocStocks.filter(a => a.poc_distance <= 3);
+          const atPoc = pocStocks.filter(a => a.poc_distance <= 1);
+
+          return (
+            <>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, flexWrap:'wrap', gap:8}}>
+                <div>
+                  <h2 style={{fontSize:20, fontWeight:700, margin:0}}>POC Scanner</h2>
+                  <p style={{color:'#94a3b8', margin:'4px 0 0', fontSize:14}}>Stocks closest to their Point of Control — highest probability zones</p>
+                </div>
+                <div style={{display:'flex', gap:12}}>
+                  <div style={{background:'#8b5cf620', borderRadius:8, padding:'8px 16px', textAlign:'center'}}>
+                    <p style={{color:'#8b5cf6', fontSize:22, fontWeight:700, margin:0}}>{atPoc.length}</p>
+                    <p style={{color:'#94a3b8', fontSize:11, margin:0}}>AT POC (&lt;1%)</p>
+                  </div>
+                  <div style={{background:'#3b82f620', borderRadius:8, padding:'8px 16px', textAlign:'center'}}>
+                    <p style={{color:'#3b82f6', fontSize:22, fontWeight:700, margin:0}}>{nearPoc.length}</p>
+                    <p style={{color:'#94a3b8', fontSize:11, margin:0}}>NEAR POC (&lt;3%)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Visual VP Cards */}
+              <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(350px, 1fr))', gap:16, marginTop:20}}>
+                {pocStocks.slice(0, 20).map(a => {
+                  const sig = getSignal(a);
+                  const dist = a.vp_distribution || [];
+                  const vaLow = a.value_area_low || 0;
+                  const vaHigh = a.value_area_high || 0;
+
+                  return (
+                    <div key={a.ticker} onClick={() => setSelectedStock(a)}
+                      style={{
+                        background:'#1e293b', borderRadius:16, padding:20, cursor:'pointer',
+                        border: a.poc_distance <= 1 ? '2px solid #8b5cf6' : a.poc_distance <= 3 ? '1px solid #3b82f6' : '1px solid #334155',
+                        transition:'all 0.2s',
+                      }}
+                      onMouseOver={e => e.currentTarget.style.transform='translateY(-2px)'}
+                      onMouseOut={e => e.currentTarget.style.transform='translateY(0)'}>
+
+                      {/* Header */}
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+                        <div style={{display:'flex', alignItems:'center', gap:8}}>
+                          <span style={{fontSize:18, fontWeight:700}}>{a.ticker}</span>
+                          <span style={{color:'#94a3b8', fontSize:12}}>{a.sector_code}</span>
+                          {a.poc_distance <= 1 && <span style={{background:'#8b5cf620', color:'#8b5cf6', padding:'2px 8px', borderRadius:12, fontSize:10, fontWeight:700}}>AT POC</span>}
+                        </div>
+                        <span style={{background:sig.bg, color:sig.color, padding:'4px 10px', borderRadius:16, fontSize:12, fontWeight:700}}>{sig.icon} {sig.label}</span>
+                      </div>
+
+                      {/* Price + POC */}
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:16}}>
+                        <div>
+                          <p style={{fontSize:24, fontWeight:700, margin:0}}>${a.price?.toFixed(2)}</p>
+                          <p style={{color: a.change_pct >= 0 ? '#22c55e' : '#ef4444', fontSize:13, margin:'2px 0 0', fontWeight:600}}>
+                            {a.change_pct >= 0 ? '+' : ''}{a.change_pct?.toFixed(2)}%
+                          </p>
+                        </div>
+                        <div style={{textAlign:'right'}}>
+                          <p style={{color:'#8b5cf6', fontSize:12, margin:0}}>POC</p>
+                          <p style={{color:'#8b5cf6', fontSize:20, fontWeight:700, margin:0}}>${a.poc_price?.toFixed(2)}</p>
+                          <p style={{color: a.poc_distance <= 1 ? '#8b5cf6' : a.poc_distance <= 3 ? '#3b82f6' : '#94a3b8', fontSize:12, margin:0, fontWeight:600}}>
+                            {a.poc_distance?.toFixed(2)}% {a.poc_position}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Volume Profile Visual */}
+                      {dist.length > 0 ? (
+                        <div style={{marginBottom:12}}>
+                          <p style={{fontSize:11, color:'#64748b', margin:'0 0 6px'}}>Volume Profile</p>
+                          <div style={{display:'flex', flexDirection:'column', gap:1}}>
+                            {dist.map((d, idx) => (
+                              <div key={idx} style={{display:'flex', alignItems:'center', gap:4, height:8}}>
+                                <span style={{fontSize:8, color:'#64748b', width:45, textAlign:'right'}}>{d.price}</span>
+                                <div style={{flex:1, height:'100%', background:'#0f172a', borderRadius:2, position:'relative', overflow:'hidden'}}>
+                                  <div style={{
+                                    width: `${d.volume_pct}%`,
+                                    height:'100%',
+                                    borderRadius:2,
+                                    background: d.is_poc ? '#8b5cf6' : d.in_value_area ? '#3b82f680' : '#475569',
+                                  }} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Price position indicator */}
+                          {vaLow > 0 && vaHigh > 0 && (
+                            <div style={{marginTop:8}}>
+                              <div style={{display:'flex', justifyContent:'space-between', fontSize:9, color:'#64748b'}}>
+                                <span>VA Low ${vaLow}</span>
+                                <span style={{color:'#8b5cf6'}}>POC ${a.poc_price}</span>
+                                <span>VA High ${vaHigh}</span>
+                              </div>
+                              <div style={{background:'#334155', borderRadius:6, height:12, position:'relative', marginTop:2}}>
+                                <div style={{background:'#3b82f630', height:'100%', borderRadius:6}} />
+                                {/* POC line */}
+                                {(() => {
+                                  const range = vaHigh - vaLow;
+                                  if (range <= 0) return null;
+                                  const pocPos = Math.min(100, Math.max(0, ((a.poc_price - vaLow) / range) * 100));
+                                  const pricePos = Math.min(100, Math.max(0, ((a.price - vaLow) / range) * 100));
+                                  return (
+                                    <>
+                                      <div style={{position:'absolute', top:0, left:`${pocPos}%`, width:2, height:'100%', background:'#8b5cf6'}} />
+                                      <div style={{position:'absolute', top:-2, left:`${pricePos}%`, transform:'translateX(-50%)', width:8, height:16, background:'#f1f5f9', borderRadius:4, border:'2px solid #0f172a'}} />
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{background:'#0f172a', borderRadius:8, padding:12, marginBottom:12, textAlign:'center'}}>
+                          <p style={{color:'#64748b', fontSize:12, margin:0}}>VP data loading on next refresh...</p>
+                        </div>
+                      )}
+
+                      {/* Bottom badges */}
+                      <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+                        {getSetupBadge(a.setup_type)}
+                        <span style={{background:'#64748b20', color:'#94a3b8', padding:'2px 8px', borderRadius:12, fontSize:10}}>RSI {a.rsi?.toFixed(0)}</span>
+                        <span style={{background:'#64748b20', color:'#94a3b8', padding:'2px 8px', borderRadius:12, fontSize:10}}>Score {a.setup_score}</span>
+                        {a.relative_volume >= 1.5 && <span style={{background:'#eab30820', color:'#eab308', padding:'2px 8px', borderRadius:12, fontSize:10}}>Vol {a.relative_volume?.toFixed(1)}x</span>}
+                        {a.candlestick_patterns && a.candlestick_patterns.length > 0 && a.candlestick_patterns.map((p, pi) => (
+                          <span key={pi} style={{
+                            background: p.type === 'bullish' ? '#22c55e20' : p.type === 'bearish' ? '#ef444420' : '#64748b20',
+                            color: p.type === 'bullish' ? '#22c55e' : p.type === 'bearish' ? '#ef4444' : '#94a3b8',
+                            padding:'2px 8px', borderRadius:12, fontSize:10
+                          }}>{p.name}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
         {/* ========== SCANNER VIEW ========== */}
         {view === 'scanner' && (
           <>
