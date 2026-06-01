@@ -11,6 +11,22 @@ function App() {
   const [selectedSector, setSelectedSector] = useState(null);
   const [selectedStock, setSelectedStock] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+  const [searching, setSearching] = useState(false);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    try {
+      const r = await fetch(`${API}/api/data/search/${searchQuery.trim().toUpperCase()}`);
+      const data = await r.json();
+      if (data.error) { alert(data.error); }
+      else { setSelectedStock(data); }
+    } catch (e) { alert('Search failed'); }
+    setSearching(false);
+    setSearchQuery('');
+  };
 
   useEffect(() => { fetchData(); }, []);
 
@@ -345,6 +361,20 @@ function App() {
         <div style={{display:'flex', alignItems:'center', gap:12}}>
           <span style={{fontSize:28}}>🔬</span>
           <div><h1 style={{margin:0, fontSize:22, fontWeight:700, color:'#f1f5f9'}}>SwingLab</h1><p style={{margin:0, fontSize:12, color:'#64748b'}}>Swing Trading Analysis</p></div>
+        </div>
+    <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="Search any ticker..."
+            style={{background:'#334155', color:'white', border:'1px solid #475569', padding:'8px 12px', borderRadius:8, fontSize:13, width:160, outline:'none'}}
+          />
+          <button onClick={handleSearch} disabled={searching}
+            style={{background:'#8b5cf6', color:'white', border:'none', padding:'8px 12px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13, opacity: searching ? 0.5 : 1}}>
+            {searching ? '...' : '🔍'}
+          </button>
         </div>
         <div style={{display:'flex', gap:8}}>
           {['dashboard','alerts','bottoms','poc','scanner','sectors'].map(v => (
@@ -704,6 +734,18 @@ function App() {
               <h2 style={{fontSize:18, fontWeight:600, margin:0}}>{selectedSector ? `${selectedSector} Stocks` : 'All Stocks Scanner'}</h2>
               {selectedSector && <button onClick={() => setSelectedSector(null)} style={{background:'#334155', color:'white', border:'none', padding:'6px 12px', borderRadius:6, cursor:'pointer', fontSize:12}}>Clear</button>}
             </div>
+            <div style={{marginBottom:12}}>
+              <input
+                type="text"
+                placeholder="Filter by ticker..."
+                onChange={e => {
+                  const q = e.target.value.toUpperCase();
+                  if (q) { setSelectedSector(null); }
+                }}
+                style={{background:'#334155', color:'white', border:'1px solid #475569', padding:'8px 12px', borderRadius:8, fontSize:13, width:200, outline:'none'}}
+                id="scannerFilter"
+              />
+            </div>
             <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:16}}>
               {sectors.map(s => (<button key={s.code} onClick={() => setSelectedSector(s.code)} style={{background: selectedSector === s.code ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'6px 12px', borderRadius:6, cursor:'pointer', fontSize:12}}>{s.code}</button>))}
             </div>
@@ -711,7 +753,11 @@ function App() {
               <table style={{width:'100%', borderCollapse:'collapse'}}>
                 <thead><tr style={{borderBottom:'1px solid #334155'}}>{['Ticker','Price','Chg%','Alert','Confluence','Setup','RSI','MACD','POC','RVol'].map(h => (<th key={h} style={{padding:'10px 12px', textAlign:'left', color:'#64748b', fontSize:11, fontWeight:600}}>{h}</th>))}</tr></thead>
                 <tbody>
-                  {[...filteredAssets].sort((a,b) => b.setup_score - a.setup_score).map((a, i) => { const al = getSmartAlert(a); return (
+                  {[...filteredAssets].filter(a => {
+                    const filterEl = document.getElementById('scannerFilter');
+                    const q = filterEl ? filterEl.value.toUpperCase() : '';
+                    return !q || a.ticker.includes(q);
+                  }).sort((a,b) => b.setup_score - a.setup_score).map((a, i) => { const al = getSmartAlert(a); return (
                     <tr key={a.ticker} onClick={() => setSelectedStock(a)} style={{borderBottom:'1px solid #1e293b', background: i % 2 === 0 ? '#1e293b' : '#162032', cursor:'pointer'}} onMouseOver={e => e.currentTarget.style.background='#253048'} onMouseOut={e => e.currentTarget.style.background= i % 2 === 0 ? '#1e293b' : '#162032'}>
                       <td style={{padding:'10px 12px', fontWeight:700, color:'#f1f5f9'}}>{a.ticker}</td>
                       <td style={{padding:'10px 12px'}}>${a.price?.toFixed(2)}</td>
