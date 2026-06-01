@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import './App.css';
 
 const API = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
@@ -224,6 +224,34 @@ function App() {
     return { ...s, avgRsi: Math.round(avgRsi * 10) / 10, bottomCount, sectorBottomScore: Math.round(sectorBottomScore * 10) / 10, totalStocks: sectorAssets.length };
   }).filter(s => s.sectorBottomScore >= 2).sort((a, b) => b.sectorBottomScore - a.sectorBottomScore);
   const sectorChartData = sectors.map(s => ({ name: s.code, score: s.composite_score, fill: getScoreColor(s.composite_score) }));
+  const sectorHealthData = sectors.map(s => {
+    const sectorAssets = assets.filter(a => a.sector_code === s.code);
+    const total = sectorAssets.length || 1;
+    const bottomCount = sectorAssets.filter(a => getBottomSignal(a).score >= 3).length;
+    const bottomPct = Math.round((bottomCount / total) * 100);
+    const avgRsi = Math.round(sectorAssets.reduce((sum, a) => sum + (a.rsi || 50), 0) / total);
+    const weakCount = sectorAssets.filter(a => a.rsi < 40).length;
+    const weakPct = Math.round((weakCount / total) * 100);
+    const bearishMacdCount = sectorAssets.filter(a => a.macd && a.macd.histogram < 0).length;
+    const bearishMacdPct = Math.round((bearishMacdCount / total) * 100);
+    const bullishCount = sectorAssets.filter(a => a.setup_score >= 50).length;
+    const bullishPct = Math.round((bullishCount / total) * 100);
+    let health = 100;
+    health -= bottomPct * 0.3;
+    health -= (50 - Math.min(avgRsi, 50)) * 0.5;
+    health -= weakPct * 0.15;
+    health -= bearishMacdPct * 0.1;
+    health += (s.strength_score || 0) * 0.5;
+    health = Math.max(0, Math.min(100, Math.round(health)));
+    let status, statusColor, statusBg, statusIcon;
+    if (health < 30) { status = 'SECTOR BOTTOM'; statusColor = '#ef4444'; statusBg = '#ef444420'; statusIcon = '🔴'; }
+    else if (health < 50) { status = 'WEAK'; statusColor = '#f97316'; statusBg = '#f9731620'; statusIcon = '🟠'; }
+    else if (health < 70) { status = 'NEUTRAL'; statusColor = '#eab308'; statusBg = '#eab30820'; statusIcon = '🟡'; }
+    else { status = 'STRONG'; statusColor = '#22c55e'; statusBg = '#22c55e20'; statusIcon = '🟢'; }
+    return { ...s, health, status, statusColor, statusBg, statusIcon, bottomCount, bottomPct, avgRsi, weakCount, weakPct, bearishMacdCount, bearishMacdPct, bullishCount, bullishPct, total };
+  }).sort((a, b) => a.health - b.health);
+  const sectorsAtBottom = sectorHealthData.filter(s => s.health < 30);
+  const sectorsWeak = sectorHealthData.filter(s => s.health >= 30 && s.health < 50);
   const setupCounts = {};
   assets.forEach(a => { setupCounts[a.setup_type] = (setupCounts[a.setup_type] || 0) + 1; });
   const pieData = Object.entries(setupCounts).map(([name, value]) => ({ name, value }));
@@ -776,37 +804,137 @@ function App() {
           </>
         )}
 
-        {/* SECTORS */}
         {view === 'sectors' && (
           <>
-            <h2 style={{fontSize:18, fontWeight:600, marginBottom:16}}>Sector Analysis</h2>
-            <div style={{background:'#1e293b', borderRadius:12, overflowX:'auto'}}>
-              <table style={{width:'100%', borderCollapse:'collapse'}}>
-                <thead><tr style={{borderBottom:'1px solid #334155'}}>{['#','ETF','Sector','Price','Return 20d','RSI','Trend','Strength','Volume','Score'].map(h => (<th key={h} style={{padding:'12px 16px', textAlign:'left', color:'#64748b', fontSize:12, fontWeight:600}}>{h}</th>))}</tr></thead>
-                <tbody>
-                  {sectors.map((s, i) => (
-                    <tr key={s.code} onClick={() => {setSelectedSector(s.code); setView('scanner');}} style={{borderBottom:'1px solid #1e293b', background: i % 2 === 0 ? '#1e293b' : '#162032', cursor:'pointer'}} onMouseOver={e => e.currentTarget.style.background='#253048'} onMouseOut={e => e.currentTarget.style.background= i % 2 === 0 ? '#1e293b' : '#162032'}>
-                      <td style={{padding:'12px 16px', fontWeight:700, color:'#64748b'}}>{i+1}</td>
-                      <td style={{padding:'12px 16px', fontWeight:700, color:'#3b82f6'}}>{s.code}</td>
-                      <td style={{padding:'12px 16px'}}>{s.name}</td>
-                      <td style={{padding:'12px 16px'}}>${s.price?.toFixed(2)}</td>
-                      <td style={{padding:'12px 16px', color: s.return_20d >= 0 ? '#22c55e' : '#ef4444', fontWeight:600}}>{s.return_20d >= 0 ? '+' : ''}{s.return_20d?.toFixed(2)}%</td>
-                      <td style={{padding:'12px 16px', color: s.rsi > 70 ? '#ef4444' : s.rsi < 30 ? '#22c55e' : '#e2e8f0'}}>{s.rsi?.toFixed(1)}</td>
-                      <td style={{padding:'12px 16px'}}>{s.trend_score}</td>
-                      <td style={{padding:'12px 16px', color: s.strength_score >= 0 ? '#22c55e' : '#ef4444'}}>{s.strength_score?.toFixed(2)}</td>
-                      <td style={{padding:'12px 16px', color:'#94a3b8'}}>{s.volume_score?.toFixed(1)}</td>
-                      <td style={{padding:'12px 16px'}}><span style={{color:getScoreColor(s.composite_score), fontWeight:700, fontSize:16}}>{s.composite_score?.toFixed(1)}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{background:'#1e293b', borderRadius:16, padding:20, marginBottom:24, borderLeft:'4px solid #8b5cf6'}}>
+              <h3 style={{margin:'0 0 8px', fontSize:16, fontWeight:600, color:'#f1f5f9'}}>How Sector Health Works</h3>
+              <p style={{margin:0, fontSize:13, color:'#94a3b8', lineHeight:1.6}}>
+                Each sector gets a <strong style={{color:'#f1f5f9'}}>Health Score (0-100)</strong> based on 5 factors:
+                <strong style={{color:'#ef4444'}}> % stocks at bottom</strong>,
+                <strong style={{color:'#eab308'}}> average RSI</strong>,
+                <strong style={{color:'#3b82f6'}}> sector strength vs SPY</strong>,
+                <strong style={{color:'#f97316'}}> % weak stocks</strong>, and
+                <strong style={{color:'#8b5cf6'}}> % bearish MACD</strong>.
+                When the line turns <span style={{color:'#ef4444', fontWeight:700}}>RED</span>, the sector is at a potential bottom.
+                <span style={{color:'#22c55e', fontWeight:700}}> GREEN</span> means the sector is healthy and trending up.
+              </p>
+            </div>
+
+            <div style={{display:'flex', gap:12, marginBottom:24, flexWrap:'wrap'}}>
+              <div style={{background:'#ef444420', borderRadius:8, padding:'8px 16px', textAlign:'center'}}><p style={{color:'#ef4444', fontSize:22, fontWeight:700, margin:0}}>{sectorsAtBottom.length}</p><p style={{color:'#94a3b8', fontSize:11, margin:0}}>AT BOTTOM</p></div>
+              <div style={{background:'#f9731620', borderRadius:8, padding:'8px 16px', textAlign:'center'}}><p style={{color:'#f97316', fontSize:22, fontWeight:700, margin:0}}>{sectorsWeak.length}</p><p style={{color:'#94a3b8', fontSize:11, margin:0}}>WEAK</p></div>
+              <div style={{background:'#22c55e20', borderRadius:8, padding:'8px 16px', textAlign:'center'}}><p style={{color:'#22c55e', fontSize:22, fontWeight:700, margin:0}}>{sectorHealthData.filter(s => s.health >= 70).length}</p><p style={{color:'#94a3b8', fontSize:11, margin:0}}>STRONG</p></div>
+            </div>
+
+            <div style={{background:'#1e293b', borderRadius:12, padding:20, marginBottom:24}}>
+              <h3 style={{margin:'0 0 16px', fontSize:15, fontWeight:600}}>Sector Health Overview</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={[...sectorHealthData].sort((a, b) => b.health - a.health)} margin={{left:10, right:20, top:10, bottom:10}}>
+                  <defs>
+                    <linearGradient id="healthGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                      <stop offset="50%" stopColor="#eab308" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.3} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="code" stroke="#94a3b8" fontSize={12} />
+                  <YAxis domain={[0, 100]} stroke="#475569" fontSize={11} />
+                  <Tooltip contentStyle={{background:'#1e293b', border:'1px solid #334155', borderRadius:8, color:'#e2e8f0'}} formatter={(value, name) => {
+                    if (name === 'health') return [`${value}/100`, 'Health Score'];
+                    if (name === 'avgRsi') return [value, 'Avg RSI'];
+                    if (name === 'bottomPct') return [`${value}%`, '% At Bottom'];
+                    return [value, name];
+                  }} />
+                  <Area type="monotone" dataKey="health" stroke="#3b82f6" strokeWidth={3} fill="url(#healthGradient)" dot={(props) => {
+                    const { cx, cy, payload } = props;
+                    const color = payload.health < 30 ? '#ef4444' : payload.health < 50 ? '#f97316' : payload.health < 70 ? '#eab308' : '#22c55e';
+                    return <circle cx={cx} cy={cy} r={8} fill={color} stroke="#0f172a" strokeWidth={3} />;
+                  }} />
+                  <Line type="monotone" dataKey="avgRsi" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                  <Line type="monotone" dataKey="bottomPct" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+              <div style={{display:'flex', justifyContent:'center', gap:20, marginTop:12, fontSize:11}}>
+                <span><span style={{color:'#3b82f6'}}>--</span> Health</span>
+                <span><span style={{color:'#8b5cf6'}}>--</span> Avg RSI</span>
+                <span><span style={{color:'#ef4444'}}>--</span> % Bottom</span>
+                <span style={{marginLeft:8}}><span style={{color:'#ef4444'}}>*</span> Bottom</span>
+                <span><span style={{color:'#f97316'}}>*</span> Weak</span>
+                <span><span style={{color:'#eab308'}}>*</span> Neutral</span>
+                <span><span style={{color:'#22c55e'}}>*</span> Strong</span>
+              </div>
+            </div>
+
+            <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Sector Breakdown</h3>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))', gap:16, marginBottom:24}}>
+              {sectorHealthData.map(s => (
+                <div key={s.code} onClick={() => {setSelectedSector(s.code); setView('scanner');}}
+                  style={{background:'#1e293b', borderRadius:16, padding:20, cursor:'pointer', border: s.health < 30 ? '2px solid #ef4444' : s.health < 50 ? '1px solid #f97316' : '1px solid #334155', transition:'all 0.2s'}}
+                  onMouseOver={e => e.currentTarget.style.transform='translateY(-2px)'} onMouseOut={e => e.currentTarget.style.transform='translateY(0)'}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <span style={{fontSize:18, fontWeight:700}}>{s.code}</span>
+                      <span style={{color:'#94a3b8', fontSize:12}}>{s.name}</span>
+                    </div>
+                    <span style={{background:s.statusBg, color:s.statusColor, padding:'4px 12px', borderRadius:16, fontSize:12, fontWeight:700}}>{s.statusIcon} {s.status}</span>
+                  </div>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+                    <div>
+                      <p style={{fontSize:24, fontWeight:700, margin:0}}>${s.price?.toFixed(2)}</p>
+                      <p style={{color: s.return_20d >= 0 ? '#22c55e' : '#ef4444', margin:'2px 0 0', fontWeight:600, fontSize:13}}>{s.return_20d >= 0 ? '+' : ''}{s.return_20d?.toFixed(2)}%</p>
+                    </div>
+                    <div style={{width:65, height:65, borderRadius:'50%', border:`5px solid ${s.statusColor}`, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
+                      <span style={{fontWeight:700, fontSize:20, color:s.statusColor}}>{s.health}</span>
+                      <span style={{fontSize:8, color:'#94a3b8'}}>/100</span>
+                    </div>
+                  </div>
+                  <div style={{background:'#334155', borderRadius:6, height:10, marginBottom:16, overflow:'hidden'}}>
+                    <div style={{width:`${s.health}%`, height:'100%', borderRadius:6, background: s.health < 30 ? '#ef4444' : s.health < 50 ? '#f97316' : s.health < 70 ? '#eab308' : '#22c55e'}} />
+                  </div>
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, marginBottom:12}}>
+                    <div style={{background:'#0f172a', borderRadius:8, padding:8, textAlign:'center'}}>
+                      <p style={{color: s.bottomPct > 20 ? '#ef4444' : '#94a3b8', fontSize:18, fontWeight:700, margin:0}}>{s.bottomPct}%</p>
+                      <p style={{color:'#64748b', fontSize:9, margin:0}}>At Bottom</p>
+                    </div>
+                    <div style={{background:'#0f172a', borderRadius:8, padding:8, textAlign:'center'}}>
+                      <p style={{color: s.avgRsi < 40 ? '#ef4444' : s.avgRsi > 60 ? '#22c55e' : '#eab308', fontSize:18, fontWeight:700, margin:0}}>{s.avgRsi}</p>
+                      <p style={{color:'#64748b', fontSize:9, margin:0}}>Avg RSI</p>
+                    </div>
+                    <div style={{background:'#0f172a', borderRadius:8, padding:8, textAlign:'center'}}>
+                      <p style={{color: s.strength_score >= 0 ? '#22c55e' : '#ef4444', fontSize:18, fontWeight:700, margin:0}}>{s.strength_score?.toFixed(1)}</p>
+                      <p style={{color:'#64748b', fontSize:9, margin:0}}>vs SPY</p>
+                    </div>
+                  </div>
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8}}>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
+                      <span style={{color:'#64748b'}}>Weak</span>
+                      <span style={{color: s.weakPct > 30 ? '#ef4444' : '#94a3b8', fontWeight:600}}>{s.weakPct}%</span>
+                    </div>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
+                      <span style={{color:'#64748b'}}>Bearish MACD</span>
+                      <span style={{color: s.bearishMacdPct > 50 ? '#ef4444' : '#94a3b8', fontWeight:600}}>{s.bearishMacdPct}%</span>
+                    </div>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
+                      <span style={{color:'#64748b'}}>Bullish</span>
+                      <span style={{color: s.bullishPct > 50 ? '#22c55e' : '#94a3b8', fontWeight:600}}>{s.bullishPct}%</span>
+                    </div>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
+                      <span style={{color:'#64748b'}}>Bottoming</span>
+                      <span style={{color: s.bottomCount > 0 ? '#f97316' : '#94a3b8', fontWeight:600}}>{s.bottomCount}/{s.total}</span>
+                    </div>
+                  </div>
+                  <div style={{marginTop:12, padding:10, background:'#0f172a', borderRadius:8}}>
+                    <p style={{margin:0, fontSize:11, color:'#94a3b8'}}>
+                      {s.health < 30 ? `${s.statusIcon} SECTOR BOTTOM: ${s.bottomPct}% of stocks bottoming with avg RSI ${s.avgRsi}. Watch for reversal signals.`
+                        : s.health < 50 ? `${s.statusIcon} WEAK: ${s.weakPct}% of stocks below RSI 40. Wait for confirmation.`
+                        : s.health < 70 ? `${s.statusIcon} NEUTRAL: ${s.bullishPct}% bullish vs ${s.bearishMacdPct}% bearish. Watch direction.`
+                        : `${s.statusIcon} STRONG: ${s.bullishPct}% bullish stocks. Look for pullback entries.`}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}
-      </main>
-      <footer style={{textAlign:'center', padding:24, color:'#475569', fontSize:12, borderTop:'1px solid #1e293b'}}>SwingLab v0.4.0 - Smart Trading Alerts</footer>
-    </div>
-  );
-}
 
 export default App;
