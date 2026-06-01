@@ -35,7 +35,7 @@ function App() {
     try {
       const [secRes, assRes] = await Promise.all([
         fetch(`${API}/api/sectors`),
-        fetch(`${API}/api/assets?limit=110`)
+        fetch(`${API}/api/assets?limit=200`)
       ]);
       setSectors(await secRes.json());
       setAssets(await assRes.json());
