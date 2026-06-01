@@ -936,5 +936,10 @@ function App() {
             </div>
           </>
         )}
+      </main>
+      <footer style={{textAlign:'center', padding:24, color:'#475569', fontSize:12, borderTop:'1px solid #1e293b'}}>SwingLab v0.5.0 - Smart Trading Alerts</footer>
+    </div>
+  );
+}
 
 export default App;
