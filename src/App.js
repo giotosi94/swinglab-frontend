@@ -15,6 +15,7 @@ function App() {
   const [searchResult, setSearchResult] = useState(null);
   const [searching, setSearching] = useState(false);
   const [expandedSector, setExpandedSector] = useState(null);
+  const [regime, setRegime] = useState(null);
   // ============================================
   // RISK MANAGER
   // ============================================
@@ -41,8 +42,10 @@ function App() {
 
   const calcPositionSize = (entry, stopLoss) => {
     const risk = Math.abs(entry - stopLoss);
-    if (risk <= 0) return { shares: 0, totalRisk: 0, totalValue: 0 };
-    const shares = Math.floor(maxRiskPerTrade / risk);
+    if (risk <= 0) return { shares: 0, totalRisk: 0, totalValue: 0, riskPerShare: 0 };
+    const regimeSizing = marketRegime.sizing / 100;
+    const adjustedRisk = maxRiskPerTrade * regimeSizing;
+    const shares = Math.floor(adjustedRisk / risk);
     return { shares, totalRisk: Math.round(risk * shares * 100) / 100, totalValue: Math.round(entry * shares * 100) / 100, riskPerShare: Math.round(risk * 100) / 100 };
   };
 
@@ -51,7 +54,27 @@ function App() {
   const avgWin = 2.0;   // avg R:R on wins
   const avgLoss = 1.0;
   const kellyPct = Math.max(0, ((winRate * avgWin - (1 - winRate) * avgLoss) / avgWin) * 100).toFixed(1);
+// ============================================
+  // MARKET REGIME
+  // ============================================
+  const getMarketRegime = () => {
+    if (!regime) return { level: 'UNKNOWN', color: '#64748b', bg: '#64748b20', icon: '❓', sizing: 100, description: 'Loading...' };
+    const price = regime.price;
+    const ema50 = regime.ema50;
+    const rsi = regime.rsi;
+    const ret20d = regime.return_20d;
 
+    if (price > ema50 && rsi > 50 && ret20d > 0) {
+      return { level: 'BULL', color: '#22c55e', bg: '#22c55e15', icon: '🟢', sizing: 100, description: `SPY $${price} above EMA50 $${ema50}, RSI ${rsi?.toFixed(0)}, +${ret20d?.toFixed(1)}% in 20d. Full size positions allowed.` };
+    } else if (price > ema50 && (rsi <= 50 || ret20d <= 0)) {
+      return { level: 'NEUTRAL', color: '#eab308', bg: '#eab30815', icon: '🟡', sizing: 50, description: `SPY $${price} above EMA50 but momentum slowing. RSI ${rsi?.toFixed(0)}. Half size positions recommended.` };
+    } else if (price < ema50 && rsi > 35) {
+      return { level: 'BEAR', color: '#ef4444', bg: '#ef444415', icon: '🔴', sizing: 25, description: `SPY $${price} below EMA50 $${ema50}. RSI ${rsi?.toFixed(0)}. Only bottom plays at quarter size.` };
+    } else {
+      return { level: 'CRASH', color: '#991b1b', bg: '#991b1b15', icon: '⚫', sizing: 0, description: `SPY $${price} in freefall. RSI ${rsi?.toFixed(0)}. Stay in cash. Do NOT buy.` };
+    }
+  };
+  const marketRegime = getMarketRegime();
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -70,12 +93,15 @@ function App() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [secRes, assRes] = await Promise.all([
+      const [secRes, assRes, regRes] = await Promise.all([
         fetch(`${API}/api/sectors`),
-        fetch(`${API}/api/assets?limit=200`)
+        fetch(`${API}/api/assets?limit=200`),
+        fetch(`${API}/api/data/regime`)
       ]);
       setSectors(await secRes.json());
       setAssets(await assRes.json());
+      const regData = await regRes.json();
+      if (!regData.error) setRegime(regData);
     } catch (e) { console.error('Fetch error:', e); }
     setLoading(false);
   };
@@ -516,6 +542,34 @@ function App() {
 
         {view === 'dashboard' && (
           <>
+          {/* Market Regime Banner */}
+            {regime && (
+              <div style={{background:marketRegime.bg, border:`1px solid ${marketRegime.color}40`, borderRadius:16, padding:20, marginBottom:24}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12}}>
+                  <div style={{display:'flex', alignItems:'center', gap:12}}>
+                    <span style={{fontSize:28}}>{marketRegime.icon}</span>
+                    <div>
+                      <h3 style={{margin:0, fontSize:18, fontWeight:700, color:marketRegime.color}}>Market Regime: {marketRegime.level}</h3>
+                      <p style={{margin:'4px 0 0', fontSize:13, color:'#94a3b8'}}>{marketRegime.description}</p>
+                    </div>
+                  </div>
+                  <div style={{display:'flex', gap:12}}>
+                    <div style={{textAlign:'center'}}>
+                      <p style={{color:'#94a3b8', fontSize:10, margin:0}}>SPY</p>
+                      <p style={{color:'#f1f5f9', fontSize:18, fontWeight:700, margin:0}}>${regime.price}</p>
+                    </div>
+                    <div style={{textAlign:'center'}}>
+                      <p style={{color:'#94a3b8', fontSize:10, margin:0}}>RSI</p>
+                      <p style={{color: regime.rsi > 70 ? '#ef4444' : regime.rsi < 30 ? '#22c55e' : '#eab308', fontSize:18, fontWeight:700, margin:0}}>{regime.rsi}</p>
+                    </div>
+                    <div style={{textAlign:'center'}}>
+                      <p style={{color:'#94a3b8', fontSize:10, margin:0}}>Position Size</p>
+                      <p style={{color:marketRegime.color, fontSize:18, fontWeight:700, margin:0}}>{marketRegime.sizing}%</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:16, marginBottom:24}}>
               <div style={{background:'#1e293b', borderRadius:12, padding:20, borderLeft:'4px solid #3b82f6'}}><p style={{color:'#64748b', fontSize:13, margin:0}}>Sectors</p><p style={{fontSize:28, fontWeight:700, margin:'8px 0 0'}}>{sectors.length}</p></div>
               <div style={{background:'#1e293b', borderRadius:12, padding:20, borderLeft:'4px solid #22c55e'}}><p style={{color:'#64748b', fontSize:13, margin:0}}>Stocks</p><p style={{fontSize:28, fontWeight:700, margin:'8px 0 0'}}>{assets.length}</p></div>
