@@ -15,6 +15,42 @@ function App() {
   const [searchResult, setSearchResult] = useState(null);
   const [searching, setSearching] = useState(false);
   const [expandedSector, setExpandedSector] = useState(null);
+  // ============================================
+  // RISK MANAGER
+  // ============================================
+  const [capital, setCapital] = useState(() => parseFloat(localStorage.getItem('sl_capital')) || 10000);
+  const [riskPct, setRiskPct] = useState(() => parseFloat(localStorage.getItem('sl_riskPct')) || 2);
+  const [openTrades, setOpenTrades] = useState(() => JSON.parse(localStorage.getItem('sl_trades') || '[]'));
+
+  const saveCapital = (val) => { setCapital(val); localStorage.setItem('sl_capital', val); };
+  const saveRiskPct = (val) => { setRiskPct(val); localStorage.setItem('sl_riskPct', val); };
+  const saveTrades = (trades) => { setOpenTrades(trades); localStorage.setItem('sl_trades', JSON.stringify(trades)); };
+
+  const addTrade = (ticker, entry, stopLoss, shares) => {
+    const newTrade = { id: Date.now(), ticker, entry, stopLoss, shares, date: new Date().toISOString().slice(0,10), riskPerShare: Math.abs(entry - stopLoss), totalRisk: Math.abs(entry - stopLoss) * shares, totalValue: entry * shares };
+    saveTrades([...openTrades, newTrade]);
+  };
+
+  const removeTrade = (id) => { saveTrades(openTrades.filter(t => t.id !== id)); };
+
+  const maxRiskPerTrade = capital * (riskPct / 100);
+  const totalOpenRisk = openTrades.reduce((sum, t) => sum + t.totalRisk, 0);
+  const totalExposure = openTrades.reduce((sum, t) => sum + t.totalValue, 0);
+  const exposurePct = capital > 0 ? ((totalExposure / capital) * 100).toFixed(1) : 0;
+  const riskUsedPct = capital > 0 ? ((totalOpenRisk / capital) * 100).toFixed(1) : 0;
+
+  const calcPositionSize = (entry, stopLoss) => {
+    const risk = Math.abs(entry - stopLoss);
+    if (risk <= 0) return { shares: 0, totalRisk: 0, totalValue: 0 };
+    const shares = Math.floor(maxRiskPerTrade / risk);
+    return { shares, totalRisk: Math.round(risk * shares * 100) / 100, totalValue: Math.round(entry * shares * 100) / 100, riskPerShare: Math.round(risk * 100) / 100 };
+  };
+
+  // Kelly Criterion (simplified)
+  const winRate = 0.55; // default, user can adjust later with journal
+  const avgWin = 2.0;   // avg R:R on wins
+  const avgLoss = 1.0;
+  const kellyPct = Math.max(0, ((winRate * avgWin - (1 - winRate) * avgLoss) / avgWin) * 100).toFixed(1);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -341,6 +377,39 @@ function App() {
             </div>
           </div>
 
+          {/* Position Sizing */}
+          <div style={{background:'#1e293b', borderRadius:16, padding:24, marginBottom:24}}>
+            <h3 style={{margin:'0 0 16px', fontSize:16, fontWeight:600}}>Position Sizing (${capital.toLocaleString()} capital, {riskPct}% risk)</h3>
+            {(() => {
+              const pos = calcPositionSize(alert.trade.entry, alert.trade.stopLoss);
+              const alreadyOpen = openTrades.find(t => t.ticker === a.ticker);
+              return (
+                <div>
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:12, marginBottom:16}}>
+                    <div style={{background:'#0f172a', borderRadius:12, padding:16, textAlign:'center'}}>
+                      <p style={{color:'#f59e0b', fontSize:11, margin:0}}>BUY</p>
+                      <p style={{fontSize:28, fontWeight:700, color:'#f59e0b', margin:'4px 0'}}>{pos.shares}</p>
+                      <p style={{fontSize:10, color:'#94a3b8', margin:0}}>shares</p>
+                    </div>
+                    <div style={{background:'#0f172a', borderRadius:12, padding:16, textAlign:'center'}}>
+                      <p style={{color:'#64748b', fontSize:11, margin:0}}>POSITION</p>
+                      <p style={{fontSize:20, fontWeight:700, color:'#f1f5f9', margin:'4px 0'}}>${pos.totalValue.toLocaleString()}</p>
+                    </div>
+                    <div style={{background:'#0f172a', borderRadius:12, padding:16, textAlign:'center'}}>
+                      <p style={{color:'#ef4444', fontSize:11, margin:0}}>MAX LOSS</p>
+                      <p style={{fontSize:20, fontWeight:700, color:'#ef4444', margin:'4px 0'}}>${pos.totalRisk}</p>
+                    </div>
+                  </div>
+                  {alreadyOpen ? (
+                    <button onClick={() => removeTrade(alreadyOpen.id)} style={{background:'#ef4444', color:'white', border:'none', padding:'12px 24px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:14, width:'100%'}}>Close Trade</button>
+                  ) : (
+                    <button onClick={() => addTrade(a.ticker, alert.trade.entry, alert.trade.stopLoss, pos.shares)} style={{background:'#22c55e', color:'white', border:'none', padding:'12px 24px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:14, width:'100%'}}>Add to Portfolio ({pos.shares} shares @ ${alert.trade.entry})</button>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Indicators */}
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:12, marginBottom:24}}>
             <div style={{background:'#1e293b', borderRadius:12, padding:16}}><p style={{color:'#64748b', fontSize:12, margin:0}}>Setup Type</p><div style={{marginTop:8}}>{getSetupBadge(a.setup_type)}</div></div>
@@ -406,10 +475,10 @@ function App() {
           </button>
         </div>
         <div style={{display:'flex', gap:8}}>
-          {['dashboard','alerts','bottoms','poc','scanner','sectors'].map(v => (
+          {['dashboard','alerts','bottoms','poc','scanner','sectors','risk'].map(v => (
             <button key={v} onClick={() => {setView(v); setSelectedSector(null);}}
               style={{background: view===v ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13, position:'relative'}}>
-              {v === 'dashboard' ? 'Dashboard' : v === 'alerts' ? 'Alerts' : v === 'bottoms' ? 'Bottoms' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : 'Sectors'}
+              {v === 'dashboard' ? 'Dashboard' : v === 'alerts' ? 'Alerts' : v === 'bottoms' ? 'Bottoms' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : v === 'sectors' ? 'Sectors' : 'Risk'}
               {v === 'alerts' && smartAlerts.length > 0 && <span style={{position:'absolute', top:-4, right:-4, background:'#ef4444', color:'white', borderRadius:'50%', width:18, height:18, fontSize:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700}}>{smartAlerts.length}</span>}
               {v === 'bottoms' && bottomStocks.length > 0 && <span style={{position:'absolute', top:-4, right:-4, background:'#f97316', color:'white', borderRadius:'50%', width:18, height:18, fontSize:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700}}>{bottomStocks.length}</span>}
             </button>
@@ -950,6 +1019,176 @@ function App() {
                   </div>
                 );
               })}
+            </div>
+          </>
+        )}
+{/* RISK MANAGER */}
+        {view === 'risk' && (
+          <>
+            <div style={{background:'#1e293b', borderRadius:16, padding:20, marginBottom:24, borderLeft:'4px solid #f59e0b'}}>
+              <h3 style={{margin:'0 0 8px', fontSize:16, fontWeight:600, color:'#f1f5f9'}}>Risk Manager</h3>
+              <p style={{margin:0, fontSize:13, color:'#94a3b8', lineHeight:1.6}}>
+                The #1 rule: <strong style={{color:'#f1f5f9'}}>never risk more than {riskPct}% of your capital on a single trade</strong>.
+                With ${capital.toLocaleString()} capital and {riskPct}% risk, your max loss per trade is <strong style={{color:'#f59e0b'}}>${maxRiskPerTrade.toFixed(2)}</strong>.
+                The position sizer calculates exactly how many shares to buy.
+              </p>
+            </div>
+
+            {/* Settings */}
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:16, marginBottom:24}}>
+              <div style={{background:'#1e293b', borderRadius:12, padding:20}}>
+                <p style={{color:'#64748b', fontSize:12, margin:'0 0 8px'}}>Total Capital ($)</p>
+                <input type="number" value={capital} onChange={e => saveCapital(parseFloat(e.target.value) || 0)}
+                  style={{background:'#334155', color:'white', border:'1px solid #475569', padding:'12px', borderRadius:8, fontSize:18, width:'100%', outline:'none', fontWeight:700}} />
+              </div>
+              <div style={{background:'#1e293b', borderRadius:12, padding:20}}>
+                <p style={{color:'#64748b', fontSize:12, margin:'0 0 8px'}}>Risk Per Trade (%)</p>
+                <div style={{display:'flex', gap:8}}>
+                  {[1, 1.5, 2, 3, 5].map(v => (
+                    <button key={v} onClick={() => saveRiskPct(v)}
+                      style={{background: riskPct === v ? '#f59e0b' : '#334155', color:'white', border:'none', padding:'12px 16px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:16, flex:1}}>
+                      {v}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{background:'#1e293b', borderRadius:12, padding:20}}>
+                <p style={{color:'#64748b', fontSize:12, margin:'0 0 8px'}}>Max Risk Per Trade</p>
+                <p style={{fontSize:32, fontWeight:700, color:'#f59e0b', margin:0}}>${maxRiskPerTrade.toFixed(2)}</p>
+                <p style={{fontSize:11, color:'#94a3b8', margin:'4px 0 0'}}>Kelly Criterion suggests {kellyPct}% per trade</p>
+              </div>
+            </div>
+
+            {/* Portfolio Risk Overview */}
+            <div style={{background:'#1e293b', borderRadius:16, padding:20, marginBottom:24}}>
+              <h3 style={{margin:'0 0 16px', fontSize:16, fontWeight:600}}>Portfolio Risk</h3>
+              <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:12, marginBottom:16}}>
+                <div style={{background:'#0f172a', borderRadius:12, padding:16, textAlign:'center', borderLeft:'4px solid #3b82f6'}}>
+                  <p style={{color:'#3b82f6', fontSize:11, margin:0}}>CAPITAL</p>
+                  <p style={{fontSize:24, fontWeight:700, color:'#f1f5f9', margin:'4px 0'}}>${capital.toLocaleString()}</p>
+                </div>
+                <div style={{background:'#0f172a', borderRadius:12, padding:16, textAlign:'center', borderLeft:`4px solid ${parseFloat(riskUsedPct) > 10 ? '#ef4444' : parseFloat(riskUsedPct) > 5 ? '#eab308' : '#22c55e'}`}}>
+                  <p style={{color:'#64748b', fontSize:11, margin:0}}>TOTAL RISK</p>
+                  <p style={{fontSize:24, fontWeight:700, color: parseFloat(riskUsedPct) > 10 ? '#ef4444' : '#f1f5f9', margin:'4px 0'}}>${totalOpenRisk.toFixed(2)}</p>
+                  <p style={{fontSize:11, color:'#94a3b8', margin:0}}>{riskUsedPct}% of capital</p>
+                </div>
+                <div style={{background:'#0f172a', borderRadius:12, padding:16, textAlign:'center', borderLeft:`4px solid ${parseFloat(exposurePct) > 80 ? '#ef4444' : '#8b5cf6'}`}}>
+                  <p style={{color:'#64748b', fontSize:11, margin:0}}>EXPOSURE</p>
+                  <p style={{fontSize:24, fontWeight:700, color:'#f1f5f9', margin:'4px 0'}}>${totalExposure.toLocaleString()}</p>
+                  <p style={{fontSize:11, color:'#94a3b8', margin:0}}>{exposurePct}% of capital</p>
+                </div>
+                <div style={{background:'#0f172a', borderRadius:12, padding:16, textAlign:'center', borderLeft:'4px solid #22c55e'}}>
+                  <p style={{color:'#64748b', fontSize:11, margin:0}}>OPEN TRADES</p>
+                  <p style={{fontSize:24, fontWeight:700, color:'#f1f5f9', margin:'4px 0'}}>{openTrades.length}</p>
+                  <p style={{fontSize:11, color:'#94a3b8', margin:0}}>Max suggested: 5</p>
+                </div>
+              </div>
+              {/* Risk bar */}
+              <div>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:11, color:'#64748b', marginBottom:4}}>
+                  <span>0%</span><span style={{color: parseFloat(riskUsedPct) > 10 ? '#ef4444' : '#94a3b8'}}>Risk used: {riskUsedPct}%</span><span>10% max</span>
+                </div>
+                <div style={{background:'#334155', borderRadius:8, height:12, overflow:'hidden'}}>
+                  <div style={{width:`${Math.min(parseFloat(riskUsedPct) * 10, 100)}%`, height:'100%', borderRadius:8, background: parseFloat(riskUsedPct) > 10 ? '#ef4444' : parseFloat(riskUsedPct) > 5 ? '#eab308' : '#22c55e', transition:'width 0.3s'}} />
+                </div>
+              </div>
+            </div>
+
+            {/* Position Sizer for Top Alerts */}
+            <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Position Sizing for Active Alerts</h3>
+            <div style={{background:'#1e293b', borderRadius:12, overflowX:'auto', marginBottom:24}}>
+              <table style={{width:'100%', borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{borderBottom:'1px solid #334155'}}>
+                    {['Ticker','Price','Stop Loss','Risk/Share','Shares','Total Risk','Position $','R:R','Action'].map(h => (
+                      <th key={h} style={{padding:'12px', textAlign:'left', color:'#64748b', fontSize:11, fontWeight:600}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {smartAlerts.slice(0, 15).map((a, i) => {
+                    const al = a.alert;
+                    const pos = calcPositionSize(al.trade.entry, al.trade.stopLoss);
+                    const alreadyOpen = openTrades.find(t => t.ticker === a.ticker);
+                    return (
+                      <tr key={a.ticker} style={{borderBottom:'1px solid #1e293b', background: i % 2 === 0 ? '#1e293b' : '#162032'}}>
+                        <td style={{padding:'12px', fontWeight:700, color:'#f1f5f9'}}>{a.ticker}</td>
+                        <td style={{padding:'12px'}}>${al.trade.entry}</td>
+                        <td style={{padding:'12px', color:'#ef4444'}}>${al.trade.stopLoss}</td>
+                        <td style={{padding:'12px'}}>${pos.riskPerShare}</td>
+                        <td style={{padding:'12px', fontWeight:700, color:'#f59e0b', fontSize:16}}>{pos.shares}</td>
+                        <td style={{padding:'12px', color: pos.totalRisk > maxRiskPerTrade ? '#ef4444' : '#22c55e'}}>${pos.totalRisk}</td>
+                        <td style={{padding:'12px'}}>${pos.totalValue.toLocaleString()}</td>
+                        <td style={{padding:'12px', color:'#eab308'}}>{al.trade.riskReward}:1</td>
+                        <td style={{padding:'12px'}}>
+                          {alreadyOpen ? (
+                            <button onClick={(e) => {e.stopPropagation(); removeTrade(alreadyOpen.id);}}
+                              style={{background:'#ef444420', color:'#ef4444', border:'none', padding:'6px 12px', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:600}}>Close</button>
+                          ) : (
+                            <button onClick={(e) => {e.stopPropagation(); addTrade(a.ticker, al.trade.entry, al.trade.stopLoss, pos.shares);}}
+                              style={{background:'#22c55e20', color:'#22c55e', border:'none', padding:'6px 12px', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:600}}>Add Trade</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Open Trades */}
+            {openTrades.length > 0 && (
+              <>
+                <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Open Trades</h3>
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:12, marginBottom:24}}>
+                  {openTrades.map(t => {
+                    const currentAsset = assets.find(a => a.ticker === t.ticker);
+                    const currentPrice = currentAsset?.price || t.entry;
+                    const pnl = (currentPrice - t.entry) * t.shares;
+                    const pnlPct = ((currentPrice - t.entry) / t.entry * 100);
+                    const hitStop = currentPrice <= t.stopLoss;
+                    return (
+                      <div key={t.id} style={{background:'#1e293b', borderRadius:12, padding:16, border: hitStop ? '2px solid #ef4444' : pnl >= 0 ? '1px solid #22c55e40' : '1px solid #334155'}}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+                          <span style={{fontSize:18, fontWeight:700}}>{t.ticker}</span>
+                          <button onClick={() => removeTrade(t.id)} style={{background:'#ef444420', color:'#ef4444', border:'none', padding:'4px 10px', borderRadius:6, cursor:'pointer', fontSize:11}}>Close</button>
+                        </div>
+                        <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, fontSize:12}}>
+                          <div><p style={{color:'#64748b', margin:0}}>Entry</p><p style={{fontWeight:700, margin:0}}>${t.entry}</p></div>
+                          <div><p style={{color:'#64748b', margin:0}}>Current</p><p style={{fontWeight:700, color: currentPrice >= t.entry ? '#22c55e' : '#ef4444', margin:0}}>${currentPrice?.toFixed(2)}</p></div>
+                          <div><p style={{color:'#64748b', margin:0}}>Stop</p><p style={{fontWeight:700, color:'#ef4444', margin:0}}>${t.stopLoss}</p></div>
+                          <div><p style={{color:'#64748b', margin:0}}>Shares</p><p style={{fontWeight:700, margin:0}}>{t.shares}</p></div>
+                          <div><p style={{color:'#64748b', margin:0}}>P&L</p><p style={{fontWeight:700, color: pnl >= 0 ? '#22c55e' : '#ef4444', margin:0}}>{pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</p></div>
+                          <div><p style={{color:'#64748b', margin:0}}>P&L %</p><p style={{fontWeight:700, color: pnlPct >= 0 ? '#22c55e' : '#ef4444', margin:0}}>{pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%</p></div>
+                        </div>
+                        {hitStop && <p style={{color:'#ef4444', fontSize:12, fontWeight:700, margin:'8px 0 0'}}>STOP LOSS HIT - Consider closing this trade</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Risk Rules */}
+            <div style={{background:'#1e293b', borderRadius:16, padding:20}}>
+              <h3 style={{margin:'0 0 16px', fontSize:16, fontWeight:600}}>Risk Rules</h3>
+              <div style={{display:'grid', gap:8}}>
+                {[
+                  { rule: `Max ${riskPct}% risk per trade`, status: openTrades.every(t => t.totalRisk <= maxRiskPerTrade), detail: `$${maxRiskPerTrade.toFixed(2)} max loss per trade` },
+                  { rule: 'Max 5 open trades', status: openTrades.length <= 5, detail: `${openTrades.length}/5 trades open` },
+                  { rule: 'Max 10% total portfolio risk', status: parseFloat(riskUsedPct) <= 10, detail: `${riskUsedPct}% risk used` },
+                  { rule: 'Max 3 trades in same sector', status: (() => { const sc = {}; openTrades.forEach(t => { const a = assets.find(x => x.ticker === t.ticker); if (a) sc[a.sector_code] = (sc[a.sector_code]||0)+1; }); return Object.values(sc).every(v => v <= 3); })(), detail: 'Diversification check' },
+                  { rule: 'No trading against market trend', status: true, detail: 'Check Market Regime tab (coming soon)' },
+                ].map((r, i) => (
+                  <div key={i} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'#0f172a', borderRadius:8}}>
+                    <span style={{fontSize:18}}>{r.status ? '✅' : '❌'}</span>
+                    <div style={{flex:1}}>
+                      <p style={{margin:0, fontSize:13, fontWeight:600, color: r.status ? '#e2e8f0' : '#ef4444'}}>{r.rule}</p>
+                      <p style={{margin:0, fontSize:11, color:'#94a3b8'}}>{r.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}
