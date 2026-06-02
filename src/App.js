@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, ReferenceArea } from 'recharts';
 import './App.css';
 
 const API = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
@@ -14,6 +14,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [expandedSector, setExpandedSector] = useState(null);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -807,16 +808,13 @@ function App() {
         {view === 'sectors' && (
           <>
             <div style={{background:'#1e293b', borderRadius:16, padding:20, marginBottom:24, borderLeft:'4px solid #8b5cf6'}}>
-              <h3 style={{margin:'0 0 8px', fontSize:16, fontWeight:600, color:'#f1f5f9'}}>How Sector Health Works</h3>
+              <h3 style={{margin:'0 0 8px', fontSize:16, fontWeight:600, color:'#f1f5f9'}}>Sector Historical Analysis</h3>
               <p style={{margin:0, fontSize:13, color:'#94a3b8', lineHeight:1.6}}>
-                Each sector gets a <strong style={{color:'#f1f5f9'}}>Health Score (0-100)</strong> based on 5 factors:
-                <strong style={{color:'#ef4444'}}> % stocks at bottom</strong>,
-                <strong style={{color:'#eab308'}}> average RSI</strong>,
-                <strong style={{color:'#3b82f6'}}> sector strength vs SPY</strong>,
-                <strong style={{color:'#f97316'}}> % weak stocks</strong>, and
-                <strong style={{color:'#8b5cf6'}}> % bearish MACD</strong>.
-                When the line turns <span style={{color:'#ef4444', fontWeight:700}}>RED</span>, the sector is at a potential bottom.
-                <span style={{color:'#22c55e', fontWeight:700}}> GREEN</span> means the sector is healthy and trending up.
+                Each sector shows a <strong style={{color:'#f1f5f9'}}>price chart with RSI zones</strong>. 
+                <span style={{color:'#ef4444', fontWeight:600}}> Red zones</span> = RSI below 30 (oversold/bottom). 
+                <span style={{color:'#22c55e', fontWeight:600}}> Green zones</span> = RSI above 70 (overbought/top). 
+                <span style={{color:'#8b5cf6', fontWeight:600}}> Purple line</span> = RSI. 
+                Click any sector to expand the full chart.
               </p>
             </div>
 
@@ -826,113 +824,132 @@ function App() {
               <div style={{background:'#22c55e20', borderRadius:8, padding:'8px 16px', textAlign:'center'}}><p style={{color:'#22c55e', fontSize:22, fontWeight:700, margin:0}}>{sectorHealthData.filter(s => s.health >= 70).length}</p><p style={{color:'#94a3b8', fontSize:11, margin:0}}>STRONG</p></div>
             </div>
 
-            <div style={{background:'#1e293b', borderRadius:12, padding:20, marginBottom:24}}>
-              <h3 style={{margin:'0 0 16px', fontSize:15, fontWeight:600}}>Sector Health Overview</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={[...sectorHealthData].sort((a, b) => b.health - a.health)} margin={{left:10, right:20, top:10, bottom:10}}>
-                  <defs>
-                    <linearGradient id="healthGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                      <stop offset="50%" stopColor="#eab308" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.3} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="code" stroke="#94a3b8" fontSize={12} />
-                  <YAxis domain={[0, 100]} stroke="#475569" fontSize={11} />
-                  <Tooltip contentStyle={{background:'#1e293b', border:'1px solid #334155', borderRadius:8, color:'#e2e8f0'}} formatter={(value, name) => {
-                    if (name === 'health') return [`${value}/100`, 'Health Score'];
-                    if (name === 'avgRsi') return [value, 'Avg RSI'];
-                    if (name === 'bottomPct') return [`${value}%`, '% At Bottom'];
-                    return [value, name];
-                  }} />
-                  <Area type="monotone" dataKey="health" stroke="#3b82f6" strokeWidth={3} fill="url(#healthGradient)" dot={(props) => {
-                    const { cx, cy, payload } = props;
-                    const color = payload.health < 30 ? '#ef4444' : payload.health < 50 ? '#f97316' : payload.health < 70 ? '#eab308' : '#22c55e';
-                    return <circle cx={cx} cy={cy} r={8} fill={color} stroke="#0f172a" strokeWidth={3} />;
-                  }} />
-                  <Line type="monotone" dataKey="avgRsi" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                  <Line type="monotone" dataKey="bottomPct" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-              <div style={{display:'flex', justifyContent:'center', gap:20, marginTop:12, fontSize:11}}>
-                <span><span style={{color:'#3b82f6'}}>--</span> Health</span>
-                <span><span style={{color:'#8b5cf6'}}>--</span> Avg RSI</span>
-                <span><span style={{color:'#ef4444'}}>--</span> % Bottom</span>
-                <span style={{marginLeft:8}}><span style={{color:'#ef4444'}}>*</span> Bottom</span>
-                <span><span style={{color:'#f97316'}}>*</span> Weak</span>
-                <span><span style={{color:'#eab308'}}>*</span> Neutral</span>
-                <span><span style={{color:'#22c55e'}}>*</span> Strong</span>
-              </div>
-            </div>
+            <div style={{display:'grid', gridTemplateColumns: expandedSector ? '1fr' : 'repeat(auto-fit, minmax(500px, 1fr))', gap:16}}>
+              {sectorHealthData.map(s => {
+                const history = s.history || [];
+                const isExpanded = expandedSector === s.code;
+                const oversoldDays = history.filter(h => h.zone === 'oversold').length;
+                const overboughtDays = history.filter(h => h.zone === 'overbought').length;
 
-            <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Sector Breakdown</h3>
-            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))', gap:16, marginBottom:24}}>
-              {sectorHealthData.map(s => (
-                <div key={s.code} onClick={() => {setSelectedSector(s.code); setView('scanner');}}
-                  style={{background:'#1e293b', borderRadius:16, padding:20, cursor:'pointer', border: s.health < 30 ? '2px solid #ef4444' : s.health < 50 ? '1px solid #f97316' : '1px solid #334155', transition:'all 0.2s'}}
-                  onMouseOver={e => e.currentTarget.style.transform='translateY(-2px)'} onMouseOut={e => e.currentTarget.style.transform='translateY(0)'}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
-                    <div style={{display:'flex', alignItems:'center', gap:8}}>
-                      <span style={{fontSize:18, fontWeight:700}}>{s.code}</span>
-                      <span style={{color:'#94a3b8', fontSize:12}}>{s.name}</span>
+                if (expandedSector && !isExpanded) return null;
+
+                return (
+                  <div key={s.code} style={{background:'#1e293b', borderRadius:16, padding:20, border: s.health < 30 ? '2px solid #ef4444' : s.health < 50 ? '1px solid #f97316' : '1px solid #334155'}}>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, cursor:'pointer'}} onClick={() => setExpandedSector(isExpanded ? null : s.code)}>
+                      <div style={{display:'flex', alignItems:'center', gap:12}}>
+                        <span style={{fontSize:20, fontWeight:700}}>{s.code}</span>
+                        <span style={{color:'#94a3b8', fontSize:13}}>{s.name}</span>
+                        <span style={{background:s.statusBg, color:s.statusColor, padding:'4px 12px', borderRadius:16, fontSize:12, fontWeight:700}}>{s.statusIcon} {s.status}</span>
+                      </div>
+                      <div style={{display:'flex', alignItems:'center', gap:12}}>
+                        <span style={{fontSize:22, fontWeight:700}}>${s.price?.toFixed(2)}</span>
+                        <span style={{color: s.return_20d >= 0 ? '#22c55e' : '#ef4444', fontWeight:600}}>{s.return_20d >= 0 ? '+' : ''}{s.return_20d?.toFixed(2)}%</span>
+                        <span style={{color:'#64748b', fontSize:18}}>{isExpanded ? '▼' : '▶'}</span>
+                      </div>
                     </div>
-                    <span style={{background:s.statusBg, color:s.statusColor, padding:'4px 12px', borderRadius:16, fontSize:12, fontWeight:700}}>{s.statusIcon} {s.status}</span>
+
+                    {/* Mini stats */}
+                    <div style={{display:'flex', gap:16, marginBottom:12, fontSize:12}}>
+                      <span style={{color:'#94a3b8'}}>RSI <span style={{color: s.rsi > 70 ? '#ef4444' : s.rsi < 30 ? '#22c55e' : '#eab308', fontWeight:700}}>{s.rsi?.toFixed(0)}</span></span>
+                      <span style={{color:'#94a3b8'}}>Health <span style={{color:s.statusColor, fontWeight:700}}>{s.health}/100</span></span>
+                      <span style={{color:'#94a3b8'}}>Oversold days <span style={{color: oversoldDays > 5 ? '#ef4444' : '#94a3b8', fontWeight:700}}>{oversoldDays}</span></span>
+                      <span style={{color:'#94a3b8'}}>Overbought days <span style={{color: overboughtDays > 5 ? '#ef4444' : '#94a3b8', fontWeight:700}}>{overboughtDays}</span></span>
+                      <span style={{color:'#94a3b8'}}>Bottoming <span style={{color: s.bottomPct > 0 ? '#f97316' : '#94a3b8', fontWeight:700}}>{s.bottomPct}%</span></span>
+                    </div>
+
+                    {/* Chart */}
+                    {history.length > 0 ? (
+                      <div>
+                        <ResponsiveContainer width="100%" height={isExpanded ? 400 : 200}>
+                          <AreaChart data={history} margin={{left:0, right:10, top:10, bottom:0}}>
+                            <defs>
+                              <linearGradient id={`price_${s.code}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d => d.slice(5)} interval={isExpanded ? 5 : 10} />
+                            <YAxis yAxisId="price" stroke="#475569" fontSize={10} domain={['auto', 'auto']} />
+                            <YAxis yAxisId="rsi" orientation="right" stroke="#8b5cf640" fontSize={10} domain={[0, 100]} hide={!isExpanded} />
+                            <Tooltip contentStyle={{background:'#1e293b', border:'1px solid #334155', borderRadius:8, color:'#e2e8f0', fontSize:12}} formatter={(value, name) => {
+                              if (name === 'close') return [`$${value}`, 'Price'];
+                              if (name === 'rsi') return [value, 'RSI'];
+                              if (name === 'ema20') return [`$${value}`, 'EMA 20'];
+                              if (name === 'ema50') return [`$${value}`, 'EMA 50'];
+                              return [value, name];
+                            }} />
+                            <ReferenceLine yAxisId="rsi" y={70} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
+                            <ReferenceLine yAxisId="rsi" y={30} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} />
+                            {/* Color zones */}
+                            {history.map((h, idx) => {
+                              if (h.zone === 'oversold') return <ReferenceArea key={idx} yAxisId="price" x1={h.date} x2={history[Math.min(idx+1, history.length-1)]?.date} fill="#ef4444" fillOpacity={0.1} />;
+                              if (h.zone === 'overbought') return <ReferenceArea key={idx} yAxisId="price" x1={h.date} x2={history[Math.min(idx+1, history.length-1)]?.date} fill="#22c55e" fillOpacity={0.08} />;
+                              return null;
+                            })}
+                            <Area yAxisId="price" type="monotone" dataKey="close" stroke="#3b82f6" strokeWidth={2} fill={`url(#price_${s.code})`} dot={false} />
+                            {isExpanded && <Line yAxisId="price" type="monotone" dataKey="ema20" stroke="#eab308" strokeWidth={1} strokeDasharray="4 4" dot={false} />}
+                            {isExpanded && <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ef4444" strokeWidth={1} strokeDasharray="4 4" dot={false} />}
+                            <Line yAxisId="rsi" type="monotone" dataKey="rsi" stroke="#8b5cf6" strokeWidth={isExpanded ? 2 : 1.5} dot={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                        <div style={{display:'flex', justifyContent:'center', gap:16, marginTop:8, fontSize:10}}>
+                          <span><span style={{color:'#3b82f6'}}>━</span> Price</span>
+                          <span><span style={{color:'#8b5cf6'}}>━</span> RSI</span>
+                          {isExpanded && <span><span style={{color:'#eab308'}}>╌</span> EMA20</span>}
+                          {isExpanded && <span><span style={{color:'#ef4444'}}>╌</span> EMA50</span>}
+                          <span><span style={{background:'#ef444420', padding:'0 6px'}}>  </span> Oversold zone</span>
+                          <span><span style={{background:'#22c55e15', padding:'0 6px'}}>  </span> Overbought zone</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{background:'#0f172a', borderRadius:8, padding:20, textAlign:'center'}}><p style={{color:'#64748b', fontSize:12, margin:0}}>Historical data will appear after next refresh</p></div>
+                    )}
+
+                    {/* Expanded details */}
+                    {isExpanded && (
+                      <div style={{marginTop:16}}>
+                        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))', gap:8}}>
+                          <div style={{background:'#0f172a', borderRadius:8, padding:12, textAlign:'center'}}>
+                            <p style={{color: s.bottomPct > 20 ? '#ef4444' : '#94a3b8', fontSize:24, fontWeight:700, margin:0}}>{s.bottomPct}%</p>
+                            <p style={{color:'#64748b', fontSize:10, margin:0}}>Stocks at Bottom</p>
+                          </div>
+                          <div style={{background:'#0f172a', borderRadius:8, padding:12, textAlign:'center'}}>
+                            <p style={{color: s.avgRsi < 40 ? '#ef4444' : '#eab308', fontSize:24, fontWeight:700, margin:0}}>{s.avgRsi}</p>
+                            <p style={{color:'#64748b', fontSize:10, margin:0}}>Avg RSI</p>
+                          </div>
+                          <div style={{background:'#0f172a', borderRadius:8, padding:12, textAlign:'center'}}>
+                            <p style={{color: s.strength_score >= 0 ? '#22c55e' : '#ef4444', fontSize:24, fontWeight:700, margin:0}}>{s.strength_score?.toFixed(1)}</p>
+                            <p style={{color:'#64748b', fontSize:10, margin:0}}>vs SPY</p>
+                          </div>
+                          <div style={{background:'#0f172a', borderRadius:8, padding:12, textAlign:'center'}}>
+                            <p style={{color: s.weakPct > 30 ? '#ef4444' : '#94a3b8', fontSize:24, fontWeight:700, margin:0}}>{s.weakPct}%</p>
+                            <p style={{color:'#64748b', fontSize:10, margin:0}}>Weak Stocks</p>
+                          </div>
+                          <div style={{background:'#0f172a', borderRadius:8, padding:12, textAlign:'center'}}>
+                            <p style={{color: s.bearishMacdPct > 50 ? '#ef4444' : '#94a3b8', fontSize:24, fontWeight:700, margin:0}}>{s.bearishMacdPct}%</p>
+                            <p style={{color:'#64748b', fontSize:10, margin:0}}>Bearish MACD</p>
+                          </div>
+                          <div style={{background:'#0f172a', borderRadius:8, padding:12, textAlign:'center'}}>
+                            <p style={{color: s.bullishPct > 50 ? '#22c55e' : '#94a3b8', fontSize:24, fontWeight:700, margin:0}}>{s.bullishPct}%</p>
+                            <p style={{color:'#64748b', fontSize:10, margin:0}}>Bullish Stocks</p>
+                          </div>
+                        </div>
+                        <div style={{marginTop:12, padding:12, background:'#0f172a', borderRadius:8}}>
+                          <p style={{margin:0, fontSize:12, color:'#94a3b8'}}>
+                            {s.health < 30 ? `SECTOR BOTTOM: ${s.bottomPct}% of stocks bottoming with avg RSI ${s.avgRsi}. The red zones on the chart show when RSI dropped below 30 — these are historically the best entry points for swing trades.`
+                              : s.health < 50 ? `WEAK: Sector showing weakness. ${s.weakPct}% of stocks below RSI 40. Watch for the RSI line to bounce off the 30 level on the chart — that would signal a potential reversal.`
+                              : s.health < 70 ? `NEUTRAL: Mixed signals. Look at the chart — if price stays above EMA20 (yellow) and RSI stays above 50, the sector remains in an uptrend. A drop below could signal weakness.`
+                              : `STRONG: Healthy sector. ${s.bullishPct}% of stocks are bullish. Watch the chart for RSI approaching 70 (overbought) — that's when you should be cautious about new entries and consider taking profits.`}
+                          </p>
+                        </div>
+                        <button onClick={() => {setSelectedSector(s.code); setView('scanner');}} style={{marginTop:12, background:'#3b82f6', color:'white', border:'none', padding:'10px 20px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13, width:'100%'}}>
+                          View {s.code} Stocks
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
-                    <div>
-                      <p style={{fontSize:24, fontWeight:700, margin:0}}>${s.price?.toFixed(2)}</p>
-                      <p style={{color: s.return_20d >= 0 ? '#22c55e' : '#ef4444', margin:'2px 0 0', fontWeight:600, fontSize:13}}>{s.return_20d >= 0 ? '+' : ''}{s.return_20d?.toFixed(2)}%</p>
-                    </div>
-                    <div style={{width:65, height:65, borderRadius:'50%', border:`5px solid ${s.statusColor}`, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
-                      <span style={{fontWeight:700, fontSize:20, color:s.statusColor}}>{s.health}</span>
-                      <span style={{fontSize:8, color:'#94a3b8'}}>/100</span>
-                    </div>
-                  </div>
-                  <div style={{background:'#334155', borderRadius:6, height:10, marginBottom:16, overflow:'hidden'}}>
-                    <div style={{width:`${s.health}%`, height:'100%', borderRadius:6, background: s.health < 30 ? '#ef4444' : s.health < 50 ? '#f97316' : s.health < 70 ? '#eab308' : '#22c55e'}} />
-                  </div>
-                  <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, marginBottom:12}}>
-                    <div style={{background:'#0f172a', borderRadius:8, padding:8, textAlign:'center'}}>
-                      <p style={{color: s.bottomPct > 20 ? '#ef4444' : '#94a3b8', fontSize:18, fontWeight:700, margin:0}}>{s.bottomPct}%</p>
-                      <p style={{color:'#64748b', fontSize:9, margin:0}}>At Bottom</p>
-                    </div>
-                    <div style={{background:'#0f172a', borderRadius:8, padding:8, textAlign:'center'}}>
-                      <p style={{color: s.avgRsi < 40 ? '#ef4444' : s.avgRsi > 60 ? '#22c55e' : '#eab308', fontSize:18, fontWeight:700, margin:0}}>{s.avgRsi}</p>
-                      <p style={{color:'#64748b', fontSize:9, margin:0}}>Avg RSI</p>
-                    </div>
-                    <div style={{background:'#0f172a', borderRadius:8, padding:8, textAlign:'center'}}>
-                      <p style={{color: s.strength_score >= 0 ? '#22c55e' : '#ef4444', fontSize:18, fontWeight:700, margin:0}}>{s.strength_score?.toFixed(1)}</p>
-                      <p style={{color:'#64748b', fontSize:9, margin:0}}>vs SPY</p>
-                    </div>
-                  </div>
-                  <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8}}>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
-                      <span style={{color:'#64748b'}}>Weak</span>
-                      <span style={{color: s.weakPct > 30 ? '#ef4444' : '#94a3b8', fontWeight:600}}>{s.weakPct}%</span>
-                    </div>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
-                      <span style={{color:'#64748b'}}>Bearish MACD</span>
-                      <span style={{color: s.bearishMacdPct > 50 ? '#ef4444' : '#94a3b8', fontWeight:600}}>{s.bearishMacdPct}%</span>
-                    </div>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
-                      <span style={{color:'#64748b'}}>Bullish</span>
-                      <span style={{color: s.bullishPct > 50 ? '#22c55e' : '#94a3b8', fontWeight:600}}>{s.bullishPct}%</span>
-                    </div>
-                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 8px', background:'#0f172a', borderRadius:6}}>
-                      <span style={{color:'#64748b'}}>Bottoming</span>
-                      <span style={{color: s.bottomCount > 0 ? '#f97316' : '#94a3b8', fontWeight:600}}>{s.bottomCount}/{s.total}</span>
-                    </div>
-                  </div>
-                  <div style={{marginTop:12, padding:10, background:'#0f172a', borderRadius:8}}>
-                    <p style={{margin:0, fontSize:11, color:'#94a3b8'}}>
-                      {s.health < 30 ? `${s.statusIcon} SECTOR BOTTOM: ${s.bottomPct}% of stocks bottoming with avg RSI ${s.avgRsi}. Watch for reversal signals.`
-                        : s.health < 50 ? `${s.statusIcon} WEAK: ${s.weakPct}% of stocks below RSI 40. Wait for confirmation.`
-                        : s.health < 70 ? `${s.statusIcon} NEUTRAL: ${s.bullishPct}% bullish vs ${s.bearishMacdPct}% bearish. Watch direction.`
-                        : `${s.statusIcon} STRONG: ${s.bullishPct}% bullish stocks. Look for pullback entries.`}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
