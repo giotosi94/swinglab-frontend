@@ -15,6 +15,34 @@ function App() {
   const [searchResult, setSearchResult] = useState(null);
   const [searching, setSearching] = useState(false);
   const [expandedSector, setExpandedSector] = useState(null);
+  const [traderData, setTraderData] = useState(null);
+  const [traderLoading, setTraderLoading] = useState(false);
+
+  const fetchTrader = async () => {
+    try {
+      const r = await fetch(`${API}/api/data/autotrader`);
+      const data = await r.json();
+      if (!data.error) setTraderData(data);
+    } catch (e) { console.error('Trader fetch error:', e); }
+  };
+
+  const resetTrader = async (cap) => {
+    setTraderLoading(true);
+    try {
+      await fetch(`${API}/api/data/autotrader/reset?capital=${cap}`, { method: 'POST' });
+      await fetchTrader();
+    } catch (e) { console.error(e); }
+    setTraderLoading(false);
+  };
+
+  const runTrader = async () => {
+    setTraderLoading(true);
+    try {
+      await fetch(`${API}/api/data/autotrader/run`, { method: 'POST' });
+      await fetchTrader();
+    } catch (e) { console.error(e); }
+    setTraderLoading(false);
+  };
   const [regime, setRegime] = useState(null);
   // ============================================
   // RISK MANAGER
@@ -88,7 +116,7 @@ function App() {
     setSearchQuery('');
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); fetchTrader(); }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -501,10 +529,10 @@ function App() {
           </button>
         </div>
         <div style={{display:'flex', gap:8}}>
-          {['dashboard','alerts','bottoms','poc','scanner','sectors','risk'].map(v => (
+          {['dashboard','alerts','bottoms','poc','scanner','sectors','risk','trader'].map(v => (
             <button key={v} onClick={() => {setView(v); setSelectedSector(null);}}
               style={{background: view===v ? '#3b82f6' : '#334155', color:'white', border:'none', padding:'8px 16px', borderRadius:8, cursor:'pointer', fontWeight:600, fontSize:13, position:'relative'}}>
-              {v === 'dashboard' ? 'Dashboard' : v === 'alerts' ? 'Alerts' : v === 'bottoms' ? 'Bottoms' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : v === 'sectors' ? 'Sectors' : 'Risk'}
+              {v === 'dashboard' ? 'Dashboard' : v === 'alerts' ? 'Alerts' : v === 'bottoms' ? 'Bottoms' : v === 'poc' ? 'POC Scanner' : v === 'scanner' ? 'Scanner' : v === 'sectors' ? 'Sectors' : v === 'risk' ? 'Risk' : 'AutoTrader'}
               {v === 'alerts' && smartAlerts.length > 0 && <span style={{position:'absolute', top:-4, right:-4, background:'#ef4444', color:'white', borderRadius:'50%', width:18, height:18, fontSize:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700}}>{smartAlerts.length}</span>}
               {v === 'bottoms' && bottomStocks.length > 0 && <span style={{position:'absolute', top:-4, right:-4, background:'#f97316', color:'white', borderRadius:'50%', width:18, height:18, fontSize:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700}}>{bottomStocks.length}</span>}
             </button>
@@ -1244,6 +1272,165 @@ function App() {
                 ))}
               </div>
             </div>
+          </>
+        )}
+      {/* AUTO TRADER */}
+        {view === 'trader' && (
+          <>
+            <div style={{background:'#1e293b', borderRadius:16, padding:20, marginBottom:24, borderLeft:'4px solid #f59e0b'}}>
+              <h3 style={{margin:'0 0 8px', fontSize:16, fontWeight:600, color:'#f1f5f9'}}>Autonomous Trader</h3>
+              <p style={{margin:0, fontSize:13, color:'#94a3b8', lineHeight:1.6}}>
+                SwingLab trades <strong style={{color:'#f1f5f9'}}>autonomously</strong> based on multi-confluence analysis. 
+                It buys when confluence is 6+, sells at targets/stops/overbought. 
+                No human input needed — just set the budget and watch it trade.
+              </p>
+            </div>
+
+            {!traderData ? (
+              <div style={{background:'#1e293b', borderRadius:12, padding:40, textAlign:'center'}}>
+                <p style={{fontSize:48}}>🤖</p>
+                <p style={{fontSize:18, color:'#94a3b8', marginBottom:16}}>Auto-Trader not initialized yet</p>
+                <div style={{display:'flex', gap:8, justifyContent:'center'}}>
+                  {[5000, 10000, 25000, 50000, 100000].map(c => (
+                    <button key={c} onClick={() => resetTrader(c)} disabled={traderLoading}
+                      style={{background:'#f59e0b', color:'#0f172a', border:'none', padding:'12px 20px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:14}}>
+                      ${c.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* KPI Cards */}
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:12, marginBottom:24}}>
+                  <div style={{background:'#1e293b', borderRadius:12, padding:16, borderLeft:'4px solid #3b82f6'}}>
+                    <p style={{color:'#64748b', fontSize:11, margin:0}}>Starting Capital</p>
+                    <p style={{fontSize:22, fontWeight:700, margin:'4px 0'}}>${traderData.initial_capital?.toLocaleString()}</p>
+                  </div>
+                  <div style={{background:'#1e293b', borderRadius:12, padding:16, borderLeft:`4px solid ${(traderData.equity || 0) >= (traderData.initial_capital || 10000) ? '#22c55e' : '#ef4444'}`}}>
+                    <p style={{color:'#64748b', fontSize:11, margin:0}}>Current Equity</p>
+                    <p style={{fontSize:22, fontWeight:700, color: (traderData.equity || 0) >= (traderData.initial_capital || 10000) ? '#22c55e' : '#ef4444', margin:'4px 0'}}>${traderData.equity?.toLocaleString()}</p>
+                  </div>
+                  <div style={{background:'#1e293b', borderRadius:12, padding:16, borderLeft:`4px solid ${(traderData.total_pnl || 0) >= 0 ? '#22c55e' : '#ef4444'}`}}>
+                    <p style={{color:'#64748b', fontSize:11, margin:0}}>Total P&L</p>
+                    <p style={{fontSize:22, fontWeight:700, color: (traderData.total_pnl || 0) >= 0 ? '#22c55e' : '#ef4444', margin:'4px 0'}}>{traderData.total_pnl >= 0 ? '+' : ''}${traderData.total_pnl?.toFixed(2)}</p>
+                  </div>
+                  <div style={{background:'#1e293b', borderRadius:12, padding:16, borderLeft:'4px solid #eab308'}}>
+                    <p style={{color:'#64748b', fontSize:11, margin:0}}>Win Rate</p>
+                    <p style={{fontSize:22, fontWeight:700, color: (traderData.win_rate || 0) >= 50 ? '#22c55e' : '#ef4444', margin:'4px 0'}}>{traderData.win_rate || 0}%</p>
+                  </div>
+                  <div style={{background:'#1e293b', borderRadius:12, padding:16, borderLeft:'4px solid #8b5cf6'}}>
+                    <p style={{color:'#64748b', fontSize:11, margin:0}}>Trades</p>
+                    <p style={{fontSize:22, fontWeight:700, margin:'4px 0'}}>{traderData.wins || 0}W / {traderData.losses || 0}L</p>
+                  </div>
+                  <div style={{background:'#1e293b', borderRadius:12, padding:16, borderLeft:'4px solid #f59e0b'}}>
+                    <p style={{color:'#64748b', fontSize:11, margin:0}}>Open Positions</p>
+                    <p style={{fontSize:22, fontWeight:700, margin:'4px 0'}}>{traderData.open_positions?.length || 0}/5</p>
+                  </div>
+                </div>
+
+                {/* Equity Chart */}
+                {traderData.equity_history && traderData.equity_history.length > 1 && (
+                  <div style={{background:'#1e293b', borderRadius:12, padding:20, marginBottom:24}}>
+                    <h3 style={{margin:'0 0 16px', fontSize:15, fontWeight:600}}>Equity Curve</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={traderData.equity_history} margin={{left:10, right:10, top:10, bottom:0}}>
+                        <defs>
+                          <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={traderData.total_pnl >= 0 ? '#22c55e' : '#ef4444'} stopOpacity={0.3} />
+                            <stop offset="95%" stopColor={traderData.total_pnl >= 0 ? '#22c55e' : '#ef4444'} stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d => d.slice(5, 10)} />
+                        <YAxis stroke="#475569" fontSize={10} domain={['auto', 'auto']} />
+                        <Tooltip contentStyle={{background:'#1e293b', border:'1px solid #334155', borderRadius:8, color:'#e2e8f0'}} formatter={(v) => [`$${v.toLocaleString()}`, 'Equity']} />
+                        <ReferenceLine y={traderData.initial_capital} stroke="#475569" strokeDasharray="3 3" />
+                        <Area type="monotone" dataKey="equity" stroke={traderData.total_pnl >= 0 ? '#22c55e' : '#ef4444'} strokeWidth={2} fill="url(#equityGrad)" dot={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                    <p style={{textAlign:'center', fontSize:11, color:'#64748b', marginTop:8}}>Dashed line = starting capital ${traderData.initial_capital?.toLocaleString()}</p>
+                  </div>
+                )}
+
+                {/* P&L % Chart */}
+                {traderData.equity_history && traderData.equity_history.length > 1 && (
+                  <div style={{background:'#1e293b', borderRadius:12, padding:20, marginBottom:24}}>
+                    <h3 style={{margin:'0 0 16px', fontSize:15, fontWeight:600}}>Performance %</h3>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <AreaChart data={traderData.equity_history} margin={{left:10, right:10, top:10, bottom:0}}>
+                        <XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d => d.slice(5, 10)} />
+                        <YAxis stroke="#475569" fontSize={10} tickFormatter={v => `${v}%`} />
+                        <Tooltip contentStyle={{background:'#1e293b', border:'1px solid #334155', borderRadius:8, color:'#e2e8f0'}} formatter={(v) => [`${v}%`, 'P&L']} />
+                        <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
+                        <Area type="monotone" dataKey="pnl_pct" stroke={traderData.total_pnl >= 0 ? '#22c55e' : '#ef4444'} strokeWidth={2} fill="none" dot={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Open Positions */}
+                {traderData.open_positions && traderData.open_positions.length > 0 && (
+                  <div style={{marginBottom:24}}>
+                    <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Open Positions</h3>
+                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:12}}>
+                      {traderData.open_positions.map((p, i) => (
+                        <div key={i} style={{background:'#1e293b', borderRadius:12, padding:16, border: (p.pnl || 0) >= 0 ? '1px solid #22c55e40' : '1px solid #ef444440'}}>
+                          <div style={{display:'flex', justifyContent:'space-between', marginBottom:8}}>
+                            <span style={{fontSize:18, fontWeight:700}}>{p.ticker}</span>
+                            <span style={{color: (p.pnl || 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight:700}}>{p.pnl >= 0 ? '+' : ''}${p.pnl?.toFixed(2)} ({p.pnl_pct?.toFixed(1)}%)</span>
+                          </div>
+                          <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, fontSize:12}}>
+                            <div><span style={{color:'#64748b'}}>Entry</span><br/><span style={{fontWeight:600}}>${p.entry_price}</span></div>
+                            <div><span style={{color:'#64748b'}}>Current</span><br/><span style={{fontWeight:600, color: (p.current_price || 0) >= p.entry_price ? '#22c55e' : '#ef4444'}}>${p.current_price}</span></div>
+                            <div><span style={{color:'#64748b'}}>Shares</span><br/><span style={{fontWeight:600}}>{p.shares}</span></div>
+                            <div><span style={{color:'#64748b'}}>Stop</span><br/><span style={{color:'#ef4444'}}>${p.stop_loss}</span></div>
+                            <div><span style={{color:'#64748b'}}>Target</span><br/><span style={{color:'#22c55e'}}>${p.target_price}</span></div>
+                            <div><span style={{color:'#64748b'}}>Days</span><br/><span>{p.days_held}d</span></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Closed Trades */}
+                {traderData.closed_trades && traderData.closed_trades.length > 0 && (
+                  <div style={{marginBottom:24}}>
+                    <h3 style={{fontSize:16, fontWeight:600, marginBottom:12}}>Recent Trades</h3>
+                    <div style={{background:'#1e293b', borderRadius:12, overflowX:'auto'}}>
+                      <table style={{width:'100%', borderCollapse:'collapse'}}>
+                        <thead><tr style={{borderBottom:'1px solid #334155'}}>{['Ticker','Entry','Exit','Shares','P&L','%','Days','Reason'].map(h => (<th key={h} style={{padding:'10px 12px', textAlign:'left', color:'#64748b', fontSize:11, fontWeight:600}}>{h}</th>))}</tr></thead>
+                        <tbody>
+                          {[...traderData.closed_trades].reverse().slice(0, 20).map((t, i) => (
+                            <tr key={i} style={{borderBottom:'1px solid #1e293b', background: i % 2 === 0 ? '#1e293b' : '#162032'}}>
+                              <td style={{padding:'10px 12px', fontWeight:700}}>{t.ticker}</td>
+                              <td style={{padding:'10px 12px'}}>${t.entry_price}</td>
+                              <td style={{padding:'10px 12px'}}>${t.exit_price}</td>
+                              <td style={{padding:'10px 12px'}}>{t.shares}</td>
+                              <td style={{padding:'10px 12px', color: t.pnl >= 0 ? '#22c55e' : '#ef4444', fontWeight:700}}>{t.pnl >= 0 ? '+' : ''}${t.pnl?.toFixed(2)}</td>
+                              <td style={{padding:'10px 12px', color: t.pnl_pct >= 0 ? '#22c55e' : '#ef4444'}}>{t.pnl_pct >= 0 ? '+' : ''}{t.pnl_pct?.toFixed(1)}%</td>
+                              <td style={{padding:'10px 12px'}}>{t.days_held}d</td>
+                              <td style={{padding:'10px 12px', fontSize:11, color:'#94a3b8'}}>{t.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Controls */}
+                <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
+                  <button onClick={runTrader} disabled={traderLoading} style={{background:'#3b82f6', color:'white', border:'none', padding:'12px 24px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:14, opacity: traderLoading ? 0.5 : 1}}>
+                    {traderLoading ? 'Running...' : 'Run Trader Now'}
+                  </button>
+                  <button onClick={() => { if(window.confirm('Reset all trades and equity?')) resetTrader(traderData.initial_capital || 10000); }} style={{background:'#ef444420', color:'#ef4444', border:'1px solid #ef4444', padding:'12px 24px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:14}}>
+                    Reset
+                  </button>
+                  <p style={{color:'#64748b', fontSize:12, margin:'auto 0'}}>Last run: {traderData.last_run?.slice(0, 16) || 'Never'}</p>
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
