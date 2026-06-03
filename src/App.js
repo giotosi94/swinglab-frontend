@@ -67,6 +67,71 @@ function App() {
         <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Position Sizing</h3>{(()=>{const pos=calcPositionSize(alert.trade.entry,alert.trade.stopLoss);const already=openTrades.find(t=>t.ticker===a.ticker);return(<div><div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#f59e0b',fontSize:11,margin:0}}>BUY</p><p style={{fontSize:28,fontWeight:700,color:'#f59e0b',margin:'4px 0'}}>{pos.shares}</p><p style={{fontSize:10,color:'#94a3b8',margin:0}}>shares</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>POSITION</p><p style={{fontSize:20,fontWeight:700,margin:'4px 0'}}>${pos.totalValue.toLocaleString()}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#ef4444',fontSize:11,margin:0}}>MAX LOSS</p><p style={{fontSize:20,fontWeight:700,color:'#ef4444',margin:'4px 0'}}>${pos.totalRisk}</p></div></div>{already?(<button onClick={()=>removeTrade(already.id)} style={{background:'#ef4444',color:'white',border:'none',padding:'12px',borderRadius:8,cursor:'pointer',fontWeight:700,width:'100%'}}>Close Trade</button>):(<button onClick={()=>addTrade(a.ticker,alert.trade.entry,alert.trade.stopLoss,pos.shares)} style={{background:'#22c55e',color:'white',border:'none',padding:'12px',borderRadius:8,cursor:'pointer',fontWeight:700,width:'100%'}}>Add Trade ({pos.shares} shares)</button>)}</div>);})()}</div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:24}}><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>Setup</p><div style={{marginTop:8}}>{getSetupBadge(a.setup_type)}</div></div><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>RSI</p><p style={{fontSize:24,fontWeight:700,margin:'4px 0',color:a.rsi>70?'#ef4444':a.rsi<30?'#22c55e':'#e2e8f0'}}>{a.rsi?.toFixed(1)}</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>MACD</p><p style={{fontSize:24,fontWeight:700,margin:'4px 0',color:a.macd?.histogram>0?'#22c55e':'#ef4444'}}>{a.macd?.histogram?.toFixed(4)}</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>Volume</p><p style={{fontSize:24,fontWeight:700,margin:'4px 0',color:a.relative_volume>=1.5?'#eab308':'#e2e8f0'}}>{a.relative_volume?.toFixed(2)}x</p></div></div>
         <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Volume Profile</h3><div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#8b5cf6',fontSize:12,margin:0}}>POC</p><p style={{fontSize:28,fontWeight:700,color:'#8b5cf6',margin:'8px 0'}}>{a.poc_price?`$${a.poc_price}`:'N/A'}</p>{pocDist&&<p style={{fontSize:12,color:'#94a3b8',margin:0}}>{pocDist}% away</p>}</div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#22c55e',fontSize:12,margin:0}}>VA High</p><p style={{fontSize:28,fontWeight:700,color:'#22c55e',margin:'8px 0'}}>{a.value_area_high?`$${a.value_area_high}`:'N/A'}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#ef4444',fontSize:12,margin:0}}>VA Low</p><p style={{fontSize:28,fontWeight:700,color:'#ef4444',margin:'8px 0'}}>{a.value_area_low?`$${a.value_area_low}`:'N/A'}</p></div></div></div>
+        {a.price_history && a.price_history.length > 5 && (
+          <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}>
+            <h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Price Chart</h3>
+            <ResponsiveContainer width="100%" height={350}>
+              <AreaChart data={a.price_history} margin={{left:0,right:10,top:10,bottom:0}}>
+                <defs>
+                  <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d=>d.slice(5)} interval={Math.floor(a.price_history.length/10)}/>
+                <YAxis yAxisId="price" stroke="#475569" fontSize={10} domain={['auto','auto']}/>
+                <Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0',fontSize:12}} formatter={(value,name)=>{
+                  if(name==='close')return[`$${value}`,'Price'];
+                  if(name==='ema10')return[`$${value}`,'EMA 10'];
+                  if(name==='ema20')return[`$${value}`,'EMA 20'];
+                  if(name==='ema50')return[`$${value}`,'EMA 50'];
+                  return[value,name];
+                }}/>
+                {a.poc_price && <ReferenceLine yAxisId="price" y={a.poc_price} stroke="#8b5cf6" strokeDasharray="5 5" strokeWidth={2} label={{value:`POC $${a.poc_price}`,position:'right',fill:'#8b5cf6',fontSize:10}}/>}
+                {a.value_area_high && <ReferenceLine yAxisId="price" y={a.value_area_high} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5}/>}
+                {a.value_area_low && <ReferenceLine yAxisId="price" y={a.value_area_low} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5}/>}
+                <Area yAxisId="price" type="monotone" dataKey="close" stroke="#3b82f6" strokeWidth={2} fill="url(#priceGrad)" dot={false}/>
+                <Line yAxisId="price" type="monotone" dataKey="ema10" stroke="#22c55e" strokeWidth={1} dot={false}/>
+                <Line yAxisId="price" type="monotone" dataKey="ema20" stroke="#eab308" strokeWidth={1} strokeDasharray="4 4" dot={false}/>
+                <Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ef4444" strokeWidth={1} strokeDasharray="4 4" dot={false}/>
+              </AreaChart>
+            </ResponsiveContainer>
+            <div style={{display:'flex',justifyContent:'center',gap:16,marginTop:8,fontSize:10}}>
+              <span><span style={{color:'#3b82f6'}}>━</span> Price</span>
+              <span><span style={{color:'#22c55e'}}>━</span> EMA10</span>
+              <span><span style={{color:'#eab308'}}>╌</span> EMA20</span>
+              <span><span style={{color:'#ef4444'}}>╌</span> EMA50</span>
+              <span><span style={{color:'#8b5cf6'}}>╌</span> POC</span>
+            </div>
+            {/* RSI Sub-chart */}
+            <div style={{marginTop:16}}>
+              <p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>RSI (14)</p>
+              <ResponsiveContainer width="100%" height={120}>
+                <AreaChart data={a.price_history} margin={{left:0,right:10,top:5,bottom:0}}>
+                  <XAxis dataKey="date" stroke="#475569" fontSize={9} tickFormatter={d=>d.slice(5)} interval={Math.floor(a.price_history.length/10)}/>
+                  <YAxis stroke="#475569" fontSize={9} domain={[0,100]}/>
+                  <Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0',fontSize:11}} formatter={v=>[v,'RSI']}/>
+                  <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5}/>
+                  <ReferenceLine y={30} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5}/>
+                  <ReferenceArea y1={70} y2={100} fill="#ef4444" fillOpacity={0.05}/>
+                  <ReferenceArea y1={0} y2={30} fill="#22c55e" fillOpacity={0.05}/>
+                  <Area type="monotone" dataKey="rsi" stroke="#8b5cf6" strokeWidth={1.5} fill="none" dot={false}/>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Volume Sub-chart */}
+            <div style={{marginTop:12}}>
+              <p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>Volume</p>
+              <ResponsiveContainer width="100%" height={80}>
+                <BarChart data={a.price_history} margin={{left:0,right:10,top:5,bottom:0}}>
+                  <XAxis dataKey="date" stroke="#475569" fontSize={9} tickFormatter={d=>d.slice(5)} interval={Math.floor(a.price_history.length/10)}/>
+                  <YAxis stroke="#475569" fontSize={9}/>
+                  <Bar dataKey="volume" fill="#475569" radius={[2,2,0,0]}>{a.price_history.map((entry,idx)=>{const prev=idx>0?a.price_history[idx-1].close:entry.close;return <Cell key={idx} fill={entry.close>=prev?'#22c55e40':'#ef444440'}/>;})}</Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
         <div style={{background:'#1e293b',borderRadius:16,padding:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>EMA Structure</h3><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>{[{l:'Price',v:a.price,c:'#f1f5f9'},{l:'EMA10',v:a.ema10,c:'#3b82f6'},{l:'EMA20',v:a.ema20,c:'#eab308'},{l:'EMA50',v:a.ema50,c:'#ef4444'}].map(e=>(<div key={e.l} style={{background:'#0f172a',borderRadius:12,padding:16,borderLeft:`4px solid ${e.c}`}}><p style={{color:'#64748b',fontSize:12,margin:0}}>{e.l}</p><p style={{fontSize:20,fontWeight:700,color:e.c,margin:'4px 0'}}>${e.v?.toFixed(2)}</p></div>))}</div></div>
       </main>
     </div>); }
@@ -92,10 +157,7 @@ function App() {
             <div style={{background:'#1e293b',borderRadius:12,padding:20,borderLeft:'4px solid #8b5cf6'}}><p style={{color:'#64748b',fontSize:13,margin:0}}>Best</p><p style={{fontSize:20,fontWeight:700,margin:'8px 0 0'}}>{smartAlerts[0]?.ticker||'-'}</p></div>
           </div>
           <div style={{background:'#1e293b',borderRadius:8,padding:'10px 16px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{color:'#64748b',fontSize:12}}>Last refresh: <strong style={{color:'#f1f5f9'}}>{sectors[0]?.updated_at?new Date(sectors[0].updated_at).toLocaleString():'Never'}</strong></span><button onClick={fetchData} style={{background:'#334155',color:'#94a3b8',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11}}>Refresh UI</button></div>
-          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:16,marginBottom:32}}>
-            <div style={{background:'#1e293b',borderRadius:12,padding:20}}><h3 style={{margin:'0 0 16px',fontSize:15,fontWeight:600}}>Sector Scores</h3><ResponsiveContainer width="100%" height={300}><BarChart data={sectorChartData} layout="vertical" margin={{left:10}}><XAxis type="number" domain={[0,60]} stroke="#475569" fontSize={11}/><YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={50}/><Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0'}}/><Bar dataKey="score" radius={[0,6,6,0]}>{sectorChartData.map((e,i)=>(<Cell key={i} fill={e.fill}/>))}</Bar></BarChart></ResponsiveContainer></div>
-            <div style={{background:'#1e293b',borderRadius:12,padding:20}}><h3 style={{margin:'0 0 16px',fontSize:15,fontWeight:600}}>Setup Types</h3><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({name,value})=>`${name.replace('_',' ')} (${value})`} labelLine={false} fontSize={10}>{pieData.map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Pie><Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0'}}/></PieChart></ResponsiveContainer></div>
-          </div>
+        
           <h2 style={{fontSize:18,fontWeight:600,marginBottom:12}}>Sectors</h2>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:32}}>{sectors.map(s=>(<div key={s.code} onClick={()=>{setSelectedSector(s.code);setView('scanner');}} style={{background:'#1e293b',borderRadius:12,padding:16,cursor:'pointer',border:'1px solid #334155'}} onMouseOver={e=>e.currentTarget.style.borderColor='#3b82f6'} onMouseOut={e=>e.currentTarget.style.borderColor='#334155'}><div style={{display:'flex',justifyContent:'space-between'}}><span style={{fontWeight:700,fontSize:14}}>{s.code}</span><span style={{color:getScoreColor(s.composite_score),fontWeight:700}}>{s.composite_score?.toFixed(1)}</span></div><p style={{fontSize:11,color:'#94a3b8',margin:'4px 0'}}>{s.name}</p><p style={{fontSize:18,fontWeight:600,margin:'4px 0'}}>${s.price?.toFixed(2)}</p><p style={{fontSize:12,color:s.return_20d>=0?'#22c55e':'#ef4444',margin:0}}>{s.return_20d>=0?'+':''}{s.return_20d?.toFixed(2)}%</p></div>))}</div>
           <h2 style={{fontSize:18,fontWeight:600,marginBottom:12}}>Top 15 Setups</h2>
