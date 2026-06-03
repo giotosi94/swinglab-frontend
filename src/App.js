@@ -606,6 +606,10 @@ function App() {
               <div style={{background:'#1e293b', borderRadius:12, padding:20, borderLeft:'4px solid #8b5cf6'}}><p style={{color:'#64748b', fontSize:13, margin:0}}>Best Setup</p><p style={{fontSize:20, fontWeight:700, margin:'8px 0 0'}}>{smartAlerts[0]?.ticker || '-'}</p></div>
             </div>
 
+              <div style={{background:'#1e293b', borderRadius:8, padding:'10px 16px', marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <span style={{color:'#64748b', fontSize:12}}>Last data refresh: <strong style={{color:'#f1f5f9'}}>{sectors[0]?.updated_at ? new Date(sectors[0].updated_at).toLocaleString() : 'Never'}</strong></span>
+              <button onClick={fetchData} style={{background:'#334155', color:'#94a3b8', border:'none', padding:'4px 12px', borderRadius:6, cursor:'pointer', fontSize:11}}>Refresh UI</button>
+            </div>
             <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:16, marginBottom:32}}>
               <div style={{background:'#1e293b', borderRadius:12, padding:20}}>
                 <h3 style={{margin:'0 0 16px', fontSize:15, fontWeight:600}}>Sector Scores</h3>
