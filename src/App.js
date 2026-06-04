@@ -157,7 +157,72 @@ function App() {
             <div style={{background:'#1e293b',borderRadius:12,padding:20,borderLeft:'4px solid #8b5cf6'}}><p style={{color:'#64748b',fontSize:13,margin:0}}>Best</p><p style={{fontSize:20,fontWeight:700,margin:'8px 0 0'}}>{smartAlerts[0]?.ticker||'-'}</p></div>
           </div>
           <div style={{background:'#1e293b',borderRadius:8,padding:'10px 16px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}><span style={{color:'#64748b',fontSize:12}}>Last refresh: <strong style={{color:'#f1f5f9'}}>{sectors[0]?.updated_at?new Date(sectors[0].updated_at).toLocaleString():'Never'}</strong></span><div style={{display:'flex',gap:8}}><button onClick={fetchData} style={{background:'#334155',color:'#94a3b8',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11}}>Refresh UI</button><button onClick={async()=>{if(!window.confirm('Refresh data from API? Uses ~180 API calls'))return;try{await fetch(`${API}/api/data/refresh/sectors`,{method:'POST'});await fetch(`${API}/api/data/refresh/stocks`,{method:'POST'});await fetchData();alert('Refresh completed!');}catch(e){alert('Refresh failed');}}} style={{background:'#3b82f6',color:'white',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Refresh Data</button></div></div>
-        
+        {/* Sector Performance Chart */}
+          <div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:24}}>
+            <h3 style={{margin:'0 0 16px',fontSize:15,fontWeight:600}}>Sector Performance & Breadth</h3>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={sectors.map(s => {
+                const sa = assets.filter(a => a.sector_code === s.code);
+                const total = sa.length || 1;
+                const aboveEma50 = sa.filter(a => a.price > a.ema50).length;
+                const breadth = Math.round((aboveEma50 / total) * 100);
+                const avgRsi = Math.round(sa.reduce((sum, a) => sum + (a.rsi || 50), 0) / total);
+                return { name: s.code, return20d: s.return_20d || 0, breadth, avgRsi, score: s.composite_score || 0 };
+              }).sort((a, b) => b.return20d - a.return20d)} layout="vertical" margin={{left:10, right:20}}>
+                <XAxis type="number" stroke="#475569" fontSize={10} tickFormatter={v => `${v}%`} />
+                <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={45} />
+                <Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0',fontSize:12}} formatter={(value, name) => {
+                  if (name === 'return20d') return [`${value.toFixed(2)}%`, 'Return 20d'];
+                  if (name === 'breadth') return [`${value}%`, 'Breadth (>EMA50)'];
+                  return [value, name];
+                }} />
+                <Bar dataKey="return20d" radius={[0, 6, 6, 0]} barSize={14}>
+                  {sectors.map((s, i) => <Cell key={i} fill={s.return_20d >= 0 ? '#22c55e' : '#ef4444'} />)}
+                </Bar>
+                <Bar dataKey="breadth" radius={[0, 4, 4, 0]} barSize={10} opacity={0.5}>
+                  {sectors.map((s, i) => {
+                    const sa = assets.filter(a => a.sector_code === s.code);
+                    const b = sa.length > 0 ? (sa.filter(a => a.price > a.ema50).length / sa.length * 100) : 50;
+                    return <Cell key={i} fill={b > 60 ? '#3b82f680' : b > 40 ? '#eab30880' : '#ef444480'} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{display:'flex',justifyContent:'center',gap:20,marginTop:8,fontSize:10}}>
+              <span><span style={{color:'#22c55e'}}>■</span> Return 20d (green=positive)</span>
+              <span><span style={{color:'#3b82f6'}}>■</span> Breadth % above EMA50</span>
+            </div>
+          </div>
+
+          {/* Sector Breadth Grid */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8,marginBottom:24}}>
+            {sectors.map(s => {
+              const sa = assets.filter(a => a.sector_code === s.code);
+              const total = sa.length || 1;
+              const aboveEma50 = sa.filter(a => a.price > a.ema50).length;
+              const breadth = Math.round((aboveEma50 / total) * 100);
+              const bullish = sa.filter(a => a.setup_score >= 50).length;
+              const bearish = sa.filter(a => a.rsi > 70).length;
+              const bottoming = sa.filter(a => a.rsi < 35).length;
+              return (
+                <div key={s.code} onClick={() => {setSelectedSector(s.code); setView('scanner');}} style={{background:'#1e293b',borderRadius:10,padding:12,cursor:'pointer',border:'1px solid #334155'}} onMouseOver={e=>e.currentTarget.style.borderColor='#3b82f6'} onMouseOut={e=>e.currentTarget.style.borderColor='#334155'}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                    <span style={{fontWeight:700,fontSize:13}}>{s.code}</span>
+                    <span style={{color:s.return_20d>=0?'#22c55e':'#ef4444',fontSize:12,fontWeight:600}}>{s.return_20d>=0?'+':''}{s.return_20d?.toFixed(1)}%</span>
+                  </div>
+                  <div style={{background:'#334155',borderRadius:4,height:6,marginBottom:6,overflow:'hidden'}}>
+                    <div style={{width:`${breadth}%`,height:'100%',borderRadius:4,background:breadth>60?'#22c55e':breadth>40?'#eab308':'#ef4444'}} />
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#64748b'}}>
+                    <span>Breadth {breadth}%</span>
+                    <span style={{color:'#22c55e'}}>{bullish}🟢</span>
+                    <span style={{color:'#ef4444'}}>{bearish}🔴</span>
+                    {bottoming > 0 && <span style={{color:'#f97316'}}>{bottoming}⚠️</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <h2 style={{fontSize:18,fontWeight:600,marginBottom:12}}>Sectors</h2>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:32}}>{sectors.map(s=>(<div key={s.code} onClick={()=>{setSelectedSector(s.code);setView('scanner');}} style={{background:'#1e293b',borderRadius:12,padding:16,cursor:'pointer',border:'1px solid #334155'}} onMouseOver={e=>e.currentTarget.style.borderColor='#3b82f6'} onMouseOut={e=>e.currentTarget.style.borderColor='#334155'}><div style={{display:'flex',justifyContent:'space-between'}}><span style={{fontWeight:700,fontSize:14}}>{s.code}</span><span style={{color:getScoreColor(s.composite_score),fontWeight:700}}>{s.composite_score?.toFixed(1)}</span></div><p style={{fontSize:11,color:'#94a3b8',margin:'4px 0'}}>{s.name}</p><p style={{fontSize:18,fontWeight:600,margin:'4px 0'}}>${s.price?.toFixed(2)}</p><p style={{fontSize:12,color:s.return_20d>=0?'#22c55e':'#ef4444',margin:0}}>{s.return_20d>=0?'+':''}{s.return_20d?.toFixed(2)}%</p></div>))}</div>
           <h2 style={{fontSize:18,fontWeight:600,marginBottom:12}}>Top 15 Setups</h2>
