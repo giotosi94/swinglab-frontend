@@ -15,6 +15,17 @@ function App() {
   const [searching, setSearching] = useState(false);
   const [traderData, setTraderData] = useState(null);
   const [traderLoading, setTraderLoading] = useState(false);
+  const [alpacaData, setAlpacaData] = useState(null);
+
+  const fetchAlpaca = async () => { try { const r = await fetch(`${API}/api/data/alpaca`); const data = await r.json(); if (!data.error) setAlpacaData(data); } catch (e) {} };
+
+  const alpacaBuy = async (symbol, qty) => { try { await fetch(`${API}/api/data/alpaca/buy?symbol=${symbol}&qty=${qty}`, {method:'POST'}); await fetchAlpaca(); } catch(e) { alert('Buy failed'); } };
+
+  const alpacaSell = async (symbol, qty) => { try { await fetch(`${API}/api/data/alpaca/sell?symbol=${symbol}&qty=${qty}`, {method:'POST'}); await fetchAlpaca(); } catch(e) { alert('Sell failed'); } };
+
+  const alpacaClose = async (symbol) => { try { await fetch(`${API}/api/data/alpaca/close/${symbol}`, {method:'POST'}); await fetchAlpaca(); } catch(e) { alert('Close failed'); } };
+
+  const alpacaCloseAll = async () => { if(!window.confirm('Close ALL positions?')) return; try { await fetch(`${API}/api/data/alpaca/close-all`, {method:'POST'}); await fetchAlpaca(); } catch(e) {} };
   const [capital, setCapital] = useState(() => parseFloat(localStorage.getItem('sl_capital')) || 10000);
   const [riskPct, setRiskPct] = useState(() => parseFloat(localStorage.getItem('sl_riskPct')) || 2);
   const [openTrades, setOpenTrades] = useState(() => JSON.parse(localStorage.getItem('sl_trades') || '[]'));
@@ -35,7 +46,7 @@ function App() {
 
   const handleSearch = async () => { if (!searchQuery.trim()) return; setSearching(true); try { const r = await fetch(`${API}/api/data/search/${searchQuery.trim().toUpperCase()}`); const data = await r.json(); if (data.error) { alert(data.error); } else { setSelectedStock(data); } } catch (e) { alert('Search failed'); } setSearching(false); setSearchQuery(''); };
 
-  useEffect(() => { fetchData(); fetchTrader(); }, []);
+  useEffect(() => { fetchData(); fetchTrader(); fetchMarket(); fetchAlpaca(); }, []);
 
   const fetchData = async () => { setLoading(true); try { const [secRes, assRes] = await Promise.all([fetch(`${API}/api/sectors`), fetch(`${API}/api/assets?limit=200`)]); setSectors(await secRes.json()); setAssets(await assRes.json()); } catch (e) { console.error('Fetch error:', e); } setLoading(false); };
 
@@ -130,6 +141,31 @@ function App() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </div>
+        )}
+        {alpacaData?.connected && (
+          <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}>
+            <h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Trade with Alpaca {alpacaData.paper?'(Paper)':'(LIVE)'}</h3>
+            {(() => { const pos = calcPositionSize(alert.trade.entry, alert.trade.stopLoss); const hasPosition = alpacaData.positions?.find(p=>p.symbol===a.ticker); return (
+              <div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
+                  <div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#f59e0b',fontSize:11,margin:0}}>Shares</p><p style={{fontSize:28,fontWeight:700,color:'#f59e0b',margin:'4px 0'}}>{pos.shares}</p></div>
+                  <div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Cost</p><p style={{fontSize:20,fontWeight:700,margin:'4px 0'}}>${pos.totalValue.toLocaleString()}</p></div>
+                  <div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#ef4444',fontSize:11,margin:0}}>Max Loss</p><p style={{fontSize:20,fontWeight:700,color:'#ef4444',margin:'4px 0'}}>${pos.totalRisk}</p></div>
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  {hasPosition ? (
+                    <button onClick={()=>alpacaClose(a.ticker)} style={{background:'#ef4444',color:'white',border:'none',padding:'14px',borderRadius:8,cursor:'pointer',fontWeight:700,fontSize:15,flex:1}}>Close {a.ticker} Position</button>
+                  ) : (
+                    <>
+                      <button onClick={()=>{if(window.confirm(`Buy ${pos.shares} shares of ${a.ticker} at market price?`))alpacaBuy(a.ticker,pos.shares);}} style={{background:'#22c55e',color:'white',border:'none',padding:'14px',borderRadius:8,cursor:'pointer',fontWeight:700,fontSize:15,flex:1}}>BUY {pos.shares} shares</button>
+                      <button onClick={()=>{if(window.confirm(`Buy 1 share of ${a.ticker}?`))alpacaBuy(a.ticker,1);}} style={{background:'#334155',color:'#22c55e',border:'1px solid #22c55e',padding:'14px',borderRadius:8,cursor:'pointer',fontWeight:700,fontSize:13}}>Buy 1</button>
+                    </>
+                  )}
+                </div>
+                {hasPosition && <p style={{color:'#22c55e',fontSize:12,marginTop:8}}>Currently holding {hasPosition.qty} shares at ${hasPosition.entry_price} (P&L: {hasPosition.pnl>=0?'+':''}${hasPosition.pnl})</p>}
+              </div>
+            );})()}
           </div>
         )}
         <div style={{background:'#1e293b',borderRadius:16,padding:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>EMA Structure</h3><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>{[{l:'Price',v:a.price,c:'#f1f5f9'},{l:'EMA10',v:a.ema10,c:'#3b82f6'},{l:'EMA20',v:a.ema20,c:'#eab308'},{l:'EMA50',v:a.ema50,c:'#ef4444'}].map(e=>(<div key={e.l} style={{background:'#0f172a',borderRadius:12,padding:16,borderLeft:`4px solid ${e.c}`}}><p style={{color:'#64748b',fontSize:12,margin:0}}>{e.l}</p><p style={{fontSize:20,fontWeight:700,color:e.c,margin:'4px 0'}}>${e.v?.toFixed(2)}</p></div>))}</div></div>
@@ -231,13 +267,107 @@ function App() {
 
         {view==='scanner'&&(<><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}><h2 style={{fontSize:18,fontWeight:600,margin:0}}>{selectedSector?`${selectedSector} Stocks`:'All Stocks'}</h2>{selectedSector&&<button onClick={()=>setSelectedSector(null)} style={{background:'#334155',color:'white',border:'none',padding:'6px 12px',borderRadius:6,cursor:'pointer',fontSize:12}}>Clear</button>}</div><div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{sectors.map(s=>(<button key={s.code} onClick={()=>setSelectedSector(s.code)} style={{background:selectedSector===s.code?'#3b82f6':'#334155',color:'white',border:'none',padding:'6px 12px',borderRadius:6,cursor:'pointer',fontSize:12}}>{s.code}</button>))}</div><div style={{background:'#1e293b',borderRadius:12,overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid #334155'}}>{['Ticker','Price','Chg%','Signal','Score','Setup','RSI','POC','Wyckoff','Accum'].map(h=>(<th key={h} style={{padding:'10px 12px',textAlign:'left',color:'#64748b',fontSize:11,fontWeight:600}}>{h}</th>))}</tr></thead><tbody>{[...filteredAssets].sort((a,b)=>b.setup_score-a.setup_score).map((a,i)=>{const al=getSmartAlert(a);return(<tr key={a.ticker} onClick={()=>setSelectedStock(a)} style={{borderBottom:'1px solid #1e293b',background:i%2===0?'#1e293b':'#162032',cursor:'pointer'}} onMouseOver={e=>e.currentTarget.style.background='#253048'} onMouseOut={e=>e.currentTarget.style.background=i%2===0?'#1e293b':'#162032'}><td style={{padding:'10px 12px',fontWeight:700,color:'#f1f5f9'}}>{a.ticker}</td><td style={{padding:'10px 12px'}}>${a.price?.toFixed(2)}</td><td style={{padding:'10px 12px',color:a.change_pct>=0?'#22c55e':'#ef4444'}}>{a.change_pct>=0?'+':''}{a.change_pct?.toFixed(2)}%</td><td style={{padding:'10px 12px'}}><span style={{background:al.bg,color:al.color,padding:'2px 8px',borderRadius:12,fontSize:11,fontWeight:600}}>{al.icon} {al.level}</span></td><td style={{padding:'10px 12px'}}><span style={{color:getScoreColor(a.setup_score),fontWeight:700}}>{a.setup_score}</span></td><td style={{padding:'10px 12px'}}>{getSetupBadge(a.setup_type)}</td><td style={{padding:'10px 12px',color:a.rsi>70?'#ef4444':a.rsi<30?'#22c55e':'#e2e8f0'}}>{a.rsi?.toFixed(1)}</td><td style={{padding:'10px 12px',color:'#8b5cf6',fontSize:12}}>{a.poc_price?`$${a.poc_price}`:'-'}</td><td style={{padding:'10px 12px',fontSize:11}}>{(()=>{const w=a.wyckoff?.phase||'-';const c={accumulation:'#22c55e',markup:'#4ade80',distribution:'#ef4444',markdown:'#ef4444',spring:'#f59e0b',selling_climax:'#f97316'};return<span style={{color:c[w]||'#64748b'}}>{w}</span>;})()}</td><td style={{padding:'10px 12px'}}>{(()=>{const acc=a.accumulation?.score||0;return<span style={{color:acc>=70?'#22c55e':acc>=40?'#eab308':'#64748b',fontWeight:acc>=40?700:400}}>{acc}</span>;})()}</td></tr>);})}</tbody></table></div></>)}
 
-        {view==='trader'&&(<>{!traderData?(<div style={{background:'#1e293b',borderRadius:12,padding:40,textAlign:'center'}}><p style={{fontSize:48}}>🤖</p><p style={{fontSize:18,color:'#94a3b8',marginBottom:16}}>Auto-Trader not initialized</p><div style={{display:'flex',gap:8,justifyContent:'center'}}>{[5000,10000,25000,50000,100000].map(c=>(<button key={c} onClick={()=>resetTrader(c)} disabled={traderLoading} style={{background:'#f59e0b',color:'#0f172a',border:'none',padding:'12px 20px',borderRadius:8,cursor:'pointer',fontWeight:700,fontSize:14}}>${c.toLocaleString()}</button>))}</div></div>):(<><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:24}}><div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #3b82f6'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Capital</p><p style={{fontSize:22,fontWeight:700,margin:'4px 0'}}>${traderData.initial_capital?.toLocaleString()}</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:`4px solid ${(traderData.equity||0)>=(traderData.initial_capital||10000)?'#22c55e':'#ef4444'}`}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Equity</p><p style={{fontSize:22,fontWeight:700,color:(traderData.equity||0)>=(traderData.initial_capital||10000)?'#22c55e':'#ef4444',margin:'4px 0'}}>${traderData.equity?.toLocaleString()}</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:`4px solid ${(traderData.total_pnl||0)>=0?'#22c55e':'#ef4444'}`}}><p style={{color:'#64748b',fontSize:11,margin:0}}>P&L</p><p style={{fontSize:22,fontWeight:700,color:(traderData.total_pnl||0)>=0?'#22c55e':'#ef4444',margin:'4px 0'}}>{traderData.total_pnl>=0?'+':''}${traderData.total_pnl?.toFixed(2)}</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #eab308'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Win Rate</p><p style={{fontSize:22,fontWeight:700,color:(traderData.win_rate||0)>=50?'#22c55e':'#ef4444',margin:'4px 0'}}>{traderData.win_rate||0}%</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #8b5cf6'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Trades</p><p style={{fontSize:22,fontWeight:700,margin:'4px 0'}}>{traderData.wins||0}W/{traderData.losses||0}L</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #f59e0b'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Open</p><p style={{fontSize:22,fontWeight:700,margin:'4px 0'}}>{traderData.open_positions?.length||0}/5</p></div></div>
-          <div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:24}}><h3 style={{margin:'0 0 12px',fontSize:15,fontWeight:600}}>Risk Settings</h3><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12}}><div><p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>Capital ($)</p><input type="number" value={capital} onChange={e=>saveCapital(parseFloat(e.target.value)||0)} style={{background:'#334155',color:'white',border:'1px solid #475569',padding:'10px',borderRadius:8,fontSize:16,width:'100%',outline:'none',fontWeight:700}}/></div><div><p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>Risk Per Trade (%)</p><div style={{display:'flex',gap:6}}>{[1,1.5,2,3,5].map(v=>(<button key={v} onClick={()=>saveRiskPct(v)} style={{background:riskPct===v?'#f59e0b':'#334155',color:'white',border:'none',padding:'10px 14px',borderRadius:8,cursor:'pointer',fontWeight:700,flex:1}}>{v}%</button>))}</div></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div style={{background:'#0f172a',borderRadius:8,padding:12,textAlign:'center'}}><p style={{color:'#f59e0b',fontSize:10,margin:0}}>Max Risk/Trade</p><p style={{fontSize:18,fontWeight:700,color:'#f59e0b',margin:'4px 0'}}>${maxRiskPerTrade.toFixed(0)}</p></div><div style={{background:'#0f172a',borderRadius:8,padding:12,textAlign:'center'}}><p style={{color:parseFloat(riskUsedPct)>10?'#ef4444':'#22c55e',fontSize:10,margin:0}}>Risk Used</p><p style={{fontSize:18,fontWeight:700,color:parseFloat(riskUsedPct)>10?'#ef4444':'#22c55e',margin:'4px 0'}}>{riskUsedPct}%</p></div></div></div></div>
-          {traderData.equity_history&&traderData.equity_history.length>1&&(<div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:15,fontWeight:600}}>Equity Curve</h3><ResponsiveContainer width="100%" height={300}><AreaChart data={traderData.equity_history} margin={{left:10,right:10,top:10,bottom:0}}><defs><linearGradient id="eqG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={traderData.total_pnl>=0?'#22c55e':'#ef4444'} stopOpacity={0.3}/><stop offset="95%" stopColor={traderData.total_pnl>=0?'#22c55e':'#ef4444'} stopOpacity={0}/></linearGradient></defs><XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d=>d.slice(5,10)}/><YAxis stroke="#475569" fontSize={10} domain={['auto','auto']}/><Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0'}} formatter={v=>[`$${v.toLocaleString()}`,'Equity']}/><ReferenceLine y={traderData.initial_capital} stroke="#475569" strokeDasharray="3 3"/><Area type="monotone" dataKey="equity" stroke={traderData.total_pnl>=0?'#22c55e':'#ef4444'} strokeWidth={2} fill="url(#eqG)" dot={false}/></AreaChart></ResponsiveContainer></div>)}
-          {traderData.open_positions&&traderData.open_positions.length>0&&(<div style={{marginBottom:24}}><h3 style={{fontSize:16,fontWeight:600,marginBottom:12}}>Open Positions</h3><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:12}}>{traderData.open_positions.map((p,i)=>(<div key={i} style={{background:'#1e293b',borderRadius:12,padding:16,border:(p.pnl||0)>=0?'1px solid #22c55e40':'1px solid #ef444440'}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><span style={{fontSize:18,fontWeight:700}}>{p.ticker}</span><span style={{color:(p.pnl||0)>=0?'#22c55e':'#ef4444',fontWeight:700}}>{p.pnl>=0?'+':''}${p.pnl?.toFixed(2)} ({p.pnl_pct?.toFixed(1)}%)</span></div><div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,fontSize:12}}><div><span style={{color:'#64748b'}}>Entry</span><br/><span style={{fontWeight:600}}>${p.entry_price}</span></div><div><span style={{color:'#64748b'}}>Current</span><br/><span style={{fontWeight:600,color:(p.current_price||0)>=p.entry_price?'#22c55e':'#ef4444'}}>${p.current_price}</span></div><div><span style={{color:'#64748b'}}>Shares</span><br/><span style={{fontWeight:600}}>{p.shares}</span></div></div></div>))}</div></div>)}
-          {traderData.closed_trades&&traderData.closed_trades.length>0&&(<div style={{marginBottom:24}}><h3 style={{fontSize:16,fontWeight:600,marginBottom:12}}>Recent Trades</h3><div style={{background:'#1e293b',borderRadius:12,overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid #334155'}}>{['Ticker','Entry','Exit','P&L','%','Days','Reason'].map(h=>(<th key={h} style={{padding:'10px 12px',textAlign:'left',color:'#64748b',fontSize:11,fontWeight:600}}>{h}</th>))}</tr></thead><tbody>{[...traderData.closed_trades].reverse().slice(0,20).map((t,i)=>(<tr key={i} style={{borderBottom:'1px solid #1e293b',background:i%2===0?'#1e293b':'#162032'}}><td style={{padding:'10px 12px',fontWeight:700}}>{t.ticker}</td><td style={{padding:'10px 12px'}}>${t.entry_price}</td><td style={{padding:'10px 12px'}}>${t.exit_price}</td><td style={{padding:'10px 12px',color:t.pnl>=0?'#22c55e':'#ef4444',fontWeight:700}}>{t.pnl>=0?'+':''}${t.pnl?.toFixed(2)}</td><td style={{padding:'10px 12px',color:t.pnl_pct>=0?'#22c55e':'#ef4444'}}>{t.pnl_pct>=0?'+':''}{t.pnl_pct?.toFixed(1)}%</td><td style={{padding:'10px 12px'}}>{t.days_held}d</td><td style={{padding:'10px 12px',fontSize:11,color:'#94a3b8'}}>{t.reason}</td></tr>))}</tbody></table></div></div>)}
-          <div style={{display:'flex',gap:12,flexWrap:'wrap'}}><button onClick={runTrader} disabled={traderLoading} style={{background:'#3b82f6',color:'white',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700,opacity:traderLoading?0.5:1}}>{traderLoading?'Running...':'Run Trader Now'}</button><button onClick={()=>{if(window.confirm('Reset?'))resetTrader(traderData.initial_capital||10000);}} style={{background:'#ef444420',color:'#ef4444',border:'1px solid #ef4444',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700}}>Reset</button><p style={{color:'#64748b',fontSize:12,margin:'auto 0'}}>Last: {traderData.last_run?.slice(0,16)||'Never'}</p></div>
-        </>)}</>)}
+        {view==='trader'&&(<>
+          <div style={{background:'#1e293b',borderRadius:16,padding:20,marginBottom:24,borderLeft:'4px solid #f59e0b'}}>
+            <h3 style={{margin:'0 0 8px',fontSize:16,fontWeight:600}}>Alpaca Trading {alpacaData?.paper?'(Paper Mode)':'(LIVE)'}</h3>
+            <p style={{margin:0,fontSize:13,color:'#94a3b8'}}>Real broker connected. {alpacaData?.paper?'Paper trading — no real money at risk.':'⚠️ LIVE trading — real money!'}</p>
+          </div>
+
+          {!alpacaData?.connected ? (
+            <div style={{background:'#1e293b',borderRadius:12,padding:40,textAlign:'center'}}>
+              <p style={{fontSize:48}}>🔌</p>
+              <p style={{fontSize:18,color:'#94a3b8'}}>Connecting to Alpaca...</p>
+              <button onClick={fetchAlpaca} style={{background:'#3b82f6',color:'white',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700,marginTop:16}}>Retry</button>
+            </div>
+          ) : (<>
+            {/* KPI */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:24}}>
+              <div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #3b82f6'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Equity</p><p style={{fontSize:22,fontWeight:700,margin:'4px 0'}}>${alpacaData.equity?.toLocaleString()}</p></div>
+              <div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #22c55e'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Cash</p><p style={{fontSize:22,fontWeight:700,margin:'4px 0'}}>${alpacaData.cash?.toLocaleString()}</p></div>
+              <div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:`4px solid ${alpacaData.daily_pnl>=0?'#22c55e':'#ef4444'}`}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Daily P&L</p><p style={{fontSize:22,fontWeight:700,color:alpacaData.daily_pnl>=0?'#22c55e':'#ef4444',margin:'4px 0'}}>{alpacaData.daily_pnl>=0?'+':''}${alpacaData.daily_pnl?.toFixed(2)}</p></div>
+              <div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #eab308'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Buying Power</p><p style={{fontSize:22,fontWeight:700,margin:'4px 0'}}>${alpacaData.buying_power?.toLocaleString()}</p></div>
+              <div style={{background:'#1e293b',borderRadius:12,padding:16,borderLeft:'4px solid #8b5cf6'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Positions</p><p style={{fontSize:22,fontWeight:700,margin:'4px 0'}}>{alpacaData.positions?.length||0}</p></div>
+            </div>
+
+            {/* Risk Settings */}
+            <div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:24}}><h3 style={{margin:'0 0 12px',fontSize:15,fontWeight:600}}>Risk Settings</h3><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12}}><div><p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>Capital ($)</p><input type="number" value={capital} onChange={e=>saveCapital(parseFloat(e.target.value)||0)} style={{background:'#334155',color:'white',border:'1px solid #475569',padding:'10px',borderRadius:8,fontSize:16,width:'100%',outline:'none',fontWeight:700}}/></div><div><p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>Risk Per Trade (%)</p><div style={{display:'flex',gap:6}}>{[1,1.5,2,3,5].map(v=>(<button key={v} onClick={()=>saveRiskPct(v)} style={{background:riskPct===v?'#f59e0b':'#334155',color:'white',border:'none',padding:'10px 14px',borderRadius:8,cursor:'pointer',fontWeight:700,flex:1}}>{v}%</button>))}</div></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div style={{background:'#0f172a',borderRadius:8,padding:12,textAlign:'center'}}><p style={{color:'#f59e0b',fontSize:10,margin:0}}>Max Risk/Trade</p><p style={{fontSize:18,fontWeight:700,color:'#f59e0b',margin:'4px 0'}}>${maxRiskPerTrade.toFixed(0)}</p></div><div style={{background:'#0f172a',borderRadius:8,padding:12,textAlign:'center'}}><p style={{color:parseFloat(riskUsedPct)>10?'#ef4444':'#22c55e',fontSize:10,margin:0}}>Risk Used</p><p style={{fontSize:18,fontWeight:700,color:parseFloat(riskUsedPct)>10?'#ef4444':'#22c55e',margin:'4px 0'}}>{riskUsedPct}%</p></div></div></div></div>
+
+            {/* Equity Chart */}
+            {alpacaData.equity_history&&alpacaData.equity_history.length>1&&(
+              <div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:24}}>
+                <h3 style={{margin:'0 0 16px',fontSize:15,fontWeight:600}}>Portfolio Performance</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <AreaChart data={alpacaData.equity_history} margin={{left:10,right:10,top:10,bottom:0}}>
+                    <defs><linearGradient id="alpEq" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={alpacaData.daily_pnl>=0?'#22c55e':'#ef4444'} stopOpacity={0.3}/><stop offset="95%" stopColor={alpacaData.daily_pnl>=0?'#22c55e':'#ef4444'} stopOpacity={0}/></linearGradient></defs>
+                    <XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d=>d.slice(5)}/>
+                    <YAxis stroke="#475569" fontSize={10} domain={['auto','auto']}/>
+                    <Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0'}} formatter={v=>[`$${v.toLocaleString()}`,'Equity']}/>
+                    <Area type="monotone" dataKey="equity" stroke={alpacaData.daily_pnl>=0?'#22c55e':'#ef4444'} strokeWidth={2} fill="url(#alpEq)" dot={false}/>
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Positions */}
+            {alpacaData.positions&&alpacaData.positions.length>0&&(
+              <div style={{marginBottom:24}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                  <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Open Positions</h3>
+                  <button onClick={alpacaCloseAll} style={{background:'#ef444420',color:'#ef4444',border:'1px solid #ef4444',padding:'6px 16px',borderRadius:6,cursor:'pointer',fontWeight:600,fontSize:12}}>Close All</button>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:12}}>
+                  {alpacaData.positions.map((p,i)=>(
+                    <div key={i} style={{background:'#1e293b',borderRadius:12,padding:16,border:p.pnl>=0?'1px solid #22c55e40':'1px solid #ef444440'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                        <span style={{fontSize:20,fontWeight:700,cursor:'pointer'}} onClick={()=>{const asset=assets.find(a=>a.ticker===p.symbol);if(asset)setSelectedStock(asset);}}>{p.symbol}</span>
+                        <button onClick={()=>alpacaClose(p.symbol)} style={{background:'#ef444420',color:'#ef4444',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Close</button>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,fontSize:12}}>
+                        <div><span style={{color:'#64748b'}}>Entry</span><br/><span style={{fontWeight:600}}>${p.entry_price}</span></div>
+                        <div><span style={{color:'#64748b'}}>Current</span><br/><span style={{fontWeight:600,color:p.current_price>=p.entry_price?'#22c55e':'#ef4444'}}>${p.current_price}</span></div>
+                        <div><span style={{color:'#64748b'}}>Qty</span><br/><span style={{fontWeight:600}}>{p.qty}</span></div>
+                        <div><span style={{color:'#64748b'}}>Value</span><br/><span style={{fontWeight:600}}>${p.market_value?.toLocaleString()}</span></div>
+                        <div><span style={{color:'#64748b'}}>P&L</span><br/><span style={{fontWeight:700,color:p.pnl>=0?'#22c55e':'#ef4444'}}>{p.pnl>=0?'+':''}${p.pnl?.toFixed(2)}</span></div>
+                        <div><span style={{color:'#64748b'}}>P&L %</span><br/><span style={{fontWeight:700,color:p.pnl_pct>=0?'#22c55e':'#ef4444'}}>{p.pnl_pct>=0?'+':''}{p.pnl_pct?.toFixed(2)}%</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recent Orders */}
+            {alpacaData.orders&&alpacaData.orders.length>0&&(
+              <div style={{marginBottom:24}}>
+                <h3 style={{fontSize:16,fontWeight:600,marginBottom:12}}>Recent Orders</h3>
+                <div style={{background:'#1e293b',borderRadius:12,overflowX:'auto'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse'}}>
+                    <thead><tr style={{borderBottom:'1px solid #334155'}}>{['Symbol','Side','Qty','Type','Price','Status','Time'].map(h=>(<th key={h} style={{padding:'10px 12px',textAlign:'left',color:'#64748b',fontSize:11,fontWeight:600}}>{h}</th>))}</tr></thead>
+                    <tbody>
+                      {alpacaData.orders.map((o,i)=>(
+                        <tr key={i} style={{borderBottom:'1px solid #1e293b',background:i%2===0?'#1e293b':'#162032'}}>
+                          <td style={{padding:'10px 12px',fontWeight:700}}>{o.symbol}</td>
+                          <td style={{padding:'10px 12px',color:o.side==='buy'?'#22c55e':'#ef4444',fontWeight:600}}>{o.side?.toUpperCase()}</td>
+                          <td style={{padding:'10px 12px'}}>{o.qty}</td>
+                          <td style={{padding:'10px 12px',fontSize:11}}>{o.type}</td>
+                          <td style={{padding:'10px 12px'}}>{o.filled_avg_price?`$${o.filled_avg_price}`:'-'}</td>
+                          <td style={{padding:'10px 12px'}}><span style={{background:o.status==='filled'?'#22c55e20':o.status==='canceled'?'#ef444420':'#eab30820',color:o.status==='filled'?'#22c55e':o.status==='canceled'?'#ef4444':'#eab308',padding:'2px 8px',borderRadius:12,fontSize:10,fontWeight:600}}>{o.status}</span></td>
+                          <td style={{padding:'10px 12px',fontSize:10,color:'#94a3b8'}}>{o.created_at?.slice(0,16)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Controls */}
+            <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+              <button onClick={fetchAlpaca} style={{background:'#3b82f6',color:'white',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700}}>Refresh Portfolio</button>
+              <button onClick={runTrader} disabled={traderLoading} style={{background:'#f59e0b',color:'#0f172a',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700,opacity:traderLoading?0.5:1}}>{traderLoading?'Running...':'Run AI Trader'}</button>
+            </div>
+          </>)}
+        </>)}
 
       </main>
       <footer style={{textAlign:'center',padding:24,color:'#475569',fontSize:12,borderTop:'1px solid #1e293b'}}>SwingLab v1.0 - Consolidated</footer>
