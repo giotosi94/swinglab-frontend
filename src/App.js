@@ -46,7 +46,7 @@ function App() {
 
   const handleSearch = async () => { if (!searchQuery.trim()) return; setSearching(true); try { const r = await fetch(`${API}/api/data/search/${searchQuery.trim().toUpperCase()}`); const data = await r.json(); if (data.error) { alert(data.error); } else { setSelectedStock(data); } } catch (e) { alert('Search failed'); } setSearching(false); setSearchQuery(''); };
 
-  useEffect(() => { fetchData(); fetchTrader(); fetchMarket(); fetchAlpaca(); }, []);
+  useEffect(() => { fetchData(); fetchTrader(); fetchAlpaca(); }, []);
 
   const fetchData = async () => { setLoading(true); try { const [secRes, assRes] = await Promise.all([fetch(`${API}/api/sectors`), fetch(`${API}/api/assets?limit=200`)]); setSectors(await secRes.json()); setAssets(await assRes.json()); } catch (e) { console.error('Fetch error:', e); } setLoading(false); };
 
