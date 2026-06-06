@@ -155,5 +155,10 @@ function App() {
             <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}><button onClick={()=>{fetchAlpaca();fetchEquityHistory();}} style={{background:'#3b82f6',color:'white',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700}}>Refresh</button><button onClick={runTrader} disabled={traderLoading} style={{background:'#f59e0b',color:'#0f172a',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700,opacity:traderLoading?0.5:1}}>{traderLoading?'Running...':'Run AI Agent'}</button><span style={{color:'#64748b',fontSize:12}}>Agent runs automatically every 2 hours</span></div>
           </>)}
         </>)}
+      </main>
+      <footer style={{textAlign:'center',padding:24,color:'#475569',fontSize:12,borderTop:'1px solid #1e293b'}}>SwingLab v2.0</footer>
+    </div>
+  );
+}
 
 export default App;
