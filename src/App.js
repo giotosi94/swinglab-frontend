@@ -238,6 +238,7 @@ function App() {
     fetchEquityHistory();
     fetchMarket();
     fetchSettings();
+    fetchAgentsStatus();
     const p = setInterval(fetchLivePrices, 15000);
     const a = setInterval(fetchAlpaca, 60000);
     const d = setInterval(fetchData, 300000);
@@ -293,6 +294,15 @@ function App() {
             assets={assets}
             livePrices={livePrices}
             setSelectedStock={handleDashboardStockSelect}
+            alpacaData={alpacaData}
+            sectors={sectors}
+            agentsStatus={agentsStatus}
+            onGoToAlpaca={() => setView('alpaca')}
+            onGoToAgents={() => setView('agents')}
+            onGoToSector={(code) => {
+              setSelectedSector(code);
+              setView('stocks');
+            }}
           />
         ) : view === 'sectors' ? (
           <Sectors
