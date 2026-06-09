@@ -246,12 +246,12 @@ function App() {
       clearInterval(a);
       clearInterval(d);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, []);
 
   useEffect(() => {
     if (view === 'agents') fetchAgentsStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, [view]);
 
   // ===== RENDER HELPERS =====
