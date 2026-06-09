@@ -19,10 +19,19 @@ function App() {
   const [livePrices, setLivePrices] = useState({});
   const [equityPeriods, setEquityPeriods] = useState({});
   const [marketData, setMarketData] = useState({});
-  const fetchMarket = async () => { try { const r = await fetch(`${API}/api/data/market`); const data = await r.json(); if (data && typeof data === 'object') setMarketData(data); } catch(e){} };
   const [selectedPeriod, setSelectedPeriod] = useState('1M');
 
+  // 🆕 Agents state
+  const [agentsStatus, setAgentsStatus] = useState(null);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [agentDecisions, setAgentDecisions] = useState([]);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [learningRunning, setLearningRunning] = useState(false);
+
+  const fetchMarket = async () => { try { const r = await fetch(`${API}/api/data/market`); const data = await r.json(); if (data && typeof data === 'object') setMarketData(data); } catch(e){} };
   const fetchEquityHistory = async () => { try { const r = await fetch(`${API}/api/data/alpaca/history`); const data = await r.json(); if (data && typeof data === 'object') setEquityPeriods(data); } catch(e){} };
+
   const [capital, setCapital] = useState(() => parseFloat(localStorage.getItem('sl_capital')) || 10000);
   const [riskPct, setRiskPct] = useState(() => parseFloat(localStorage.getItem('sl_riskPct')) || 2);
   const [openTrades, setOpenTrades] = useState(() => JSON.parse(localStorage.getItem('sl_trades') || '[]'));
@@ -47,7 +56,56 @@ function App() {
   const handleSearch = async () => { if (!searchQuery.trim()) return; setSearching(true); try { const r = await fetch(`${API}/api/data/search/${searchQuery.trim().toUpperCase()}`); const data = await r.json(); if (data.error) alert(data.error); else setSelectedStock(data); } catch(e){ alert('Search failed'); } setSearching(false); setSearchQuery(''); };
   const fetchData = async () => { setLoading(true); try { const [s,a] = await Promise.all([fetch(`${API}/api/sectors`),fetch(`${API}/api/assets?limit=250`)]); setSectors(await s.json()); setAssets(await a.json()); } catch(e){} setLoading(false); };
 
-  useEffect(() => {     fetchData(); fetchTrader(); fetchAlpaca(); fetchLivePrices(); fetchEquityHistory(); fetchMarket();     const priceIv = setInterval(fetchLivePrices, 15000);     const portfolioIv = setInterval(fetchAlpaca, 60000);     const dataIv = setInterval(fetchData, 300000);     return () => { clearInterval(priceIv); clearInterval(portfolioIv); clearInterval(dataIv); };   }, []);
+  // 🆕 Agent functions
+  const fetchAgentsStatus = async () => {
+    setAgentsLoading(true);
+    try {
+      const r = await fetch(`${API}/api/agents/status`);
+      const data = await r.json();
+      if (data && !data.error) setAgentsStatus(data);
+    } catch(e) { console.error('Agents status fetch error:', e); }
+    setAgentsLoading(false);
+  };
+  const fetchAgentDecisions = async (agentName) => {
+    try {
+      const r = await fetch(`${API}/api/agents/${agentName}/decisions?limit=20`);
+      const data = await r.json();
+      if (data.decisions) setAgentDecisions(data.decisions);
+    } catch(e) {}
+  };
+  const runPipeline = async () => {
+    setPipelineRunning(true);
+    try {
+      await fetch(`${API}/api/agents/run`, {method:'POST'});
+      await fetchAgentsStatus();
+      await fetchTrader();
+      await fetchAlpaca();
+    } catch(e) { alert('Pipeline run failed'); }
+    setPipelineRunning(false);
+  };
+  const runLearning = async () => {
+    setLearningRunning(true);
+    try {
+      const r = await fetch(`${API}/api/agents/learn`, {method:'POST'});
+      const data = await r.json();
+      alert(`Learning complete!\n${Object.entries(data).map(([k,v]) => `${k}: ${v.status}`).join('\n')}`);
+      await fetchAgentsStatus();
+    } catch(e) { alert('Learning failed'); }
+    setLearningRunning(false);
+  };
+
+  useEffect(() => {
+    fetchData(); fetchTrader(); fetchAlpaca(); fetchLivePrices(); fetchEquityHistory(); fetchMarket();
+    const priceIv = setInterval(fetchLivePrices, 15000);
+    const portfolioIv = setInterval(fetchAlpaca, 60000);
+    const dataIv = setInterval(fetchData, 300000);
+    return () => { clearInterval(priceIv); clearInterval(portfolioIv); clearInterval(dataIv); };
+  }, []);
+
+  // Load agents data when switching to agents view
+  useEffect(() => {
+    if (view === 'agents') { fetchAgentsStatus(); }
+  }, [view]);
 
   const getLivePrice = (ticker) => livePrices[ticker] || null;
   const topSetups = [...assets].sort((a,b) => b.setup_score-a.setup_score).slice(0,15);
@@ -55,111 +113,544 @@ function App() {
   const getScoreColor = (s) => s>=70?'#22c55e':s>=50?'#eab308':s>=30?'#f97316':'#ef4444';
   const getSetupBadge = (type) => { const m={breakout:{bg:'#22c55e20',c:'#22c55e',l:'Breakout'},pullback_to_poc:{bg:'#3b82f620',c:'#3b82f6',l:'POC Pullback'},ema_bounce:{bg:'#8b5cf620',c:'#8b5cf6',l:'EMA Bounce'},oversold_reversal:{bg:'#06b6d420',c:'#06b6d4',l:'Reversal'},overbought_warning:{bg:'#ef444420',c:'#ef4444',l:'Overbought'},neutral:{bg:'#64748b20',c:'#94a3b8',l:'Neutral'}}; const s=m[type]||m.neutral; return <span style={{background:s.bg,color:s.c,padding:'2px 8px',borderRadius:12,fontSize:11,fontWeight:600}}>{s.l}</span>; };
 
-  const getSmartAlert = (asset) => { let factors=[],conf=0; if(asset.poc_price&&asset.price){const d=Math.abs((asset.price-asset.poc_price)/asset.price*100);if(d<=2){conf+=2;factors.push({name:'POC',score:2,max:2,detail:d.toFixed(1)+'%',pass:true});}else factors.push({name:'POC',score:0,max:2,detail:d.toFixed(1)+'%',pass:false});} const bp=(asset.candlestick_patterns||[]).filter(p=>p.type==='bullish');if(bp.length>0){conf+=1.5;factors.push({name:'Pattern',score:1.5,max:1.5,detail:bp.map(p=>p.name).join(','),pass:true});}else factors.push({name:'Pattern',score:0,max:1.5,detail:'None',pass:false}); if(asset.rsi>=40&&asset.rsi<=60){conf+=1;factors.push({name:'RSI',score:1,max:1,detail:''+asset.rsi?.toFixed(0),pass:true});}else factors.push({name:'RSI',score:0,max:1,detail:''+asset.rsi?.toFixed(0),pass:false}); if(asset.macd?.histogram>0){conf+=1;factors.push({name:'MACD',score:1,max:1,detail:'+',pass:true});}else factors.push({name:'MACD',score:0,max:1,detail:'-',pass:false}); if(asset.price>asset.ema10&&asset.ema10>asset.ema20&&asset.ema20>asset.ema50){conf+=1.5;factors.push({name:'EMA',score:1.5,max:1.5,detail:'Up',pass:true});}else if(asset.price>asset.ema20&&asset.ema20>asset.ema50){conf+=0.75;factors.push({name:'EMA',score:0.75,max:1.5,detail:'Mid',pass:true});}else factors.push({name:'EMA',score:0,max:1.5,detail:'No',pass:false}); if(asset.relative_volume>=1.5){conf+=1;factors.push({name:'Vol',score:1,max:1,detail:asset.relative_volume?.toFixed(1)+'x',pass:true});}else factors.push({name:'Vol',score:0,max:1,detail:asset.relative_volume?.toFixed(1)+'x',pass:false}); const sd=sectors.find(s=>s.code===asset.sector_code);const sr=sectors.indexOf(sd)+1;if(sr<=5){conf+=1;factors.push({name:'Sector',score:1,max:1,detail:'#'+sr,pass:true});}else factors.push({name:'Sector',score:0,max:1,detail:'#'+sr,pass:false}); if(asset.pct_from_high&&asset.pct_from_high>=-10){conf+=0.5;factors.push({name:'52W',score:0.5,max:0.5,detail:asset.pct_from_high?.toFixed(0)+'%',pass:true});}else factors.push({name:'52W',score:0,max:0.5,detail:(asset.pct_from_high||0).toFixed(0)+'%',pass:false}); if(asset.change_pct>0&&asset.change_pct<=5){conf+=0.5;factors.push({name:'Mom',score:0.5,max:0.5,detail:'+'+asset.change_pct?.toFixed(1)+'%',pass:true});}else factors.push({name:'Mom',score:0,max:0.5,detail:(asset.change_pct||0).toFixed(1)+'%',pass:false}); const bear=(asset.candlestick_patterns||[]).filter(p=>p.type==='bearish'&&p.strength==='strong');if(bear.length>0)conf=Math.max(0,conf-2);if(asset.rsi>75)conf=Math.max(0,conf-1.5); const entry=asset.price;const sl=asset.value_area_low||(asset.poc_price?asset.poc_price*0.97:entry*0.95);const t1=asset.value_area_high||entry*1.05;const rps=Math.abs(entry-sl);const rwps=Math.abs(t1-entry);const rr=rps>0?(rwps/rps).toFixed(2):0; let level,color,bg,icon;if(conf>=8){level='ELITE';color='#f59e0b';bg='#f59e0b20';icon='🔥🔥🔥';}else if(conf>=6){level='STRONG BUY';color='#22c55e';bg='#22c55e20';icon='🔥🔥';}else if(conf>=4){level='BUY';color='#4ade80';bg='#4ade8020';icon='🔥';}else if(asset.setup_type==='overbought_warning'){level='AVOID';color='#ef4444';bg='#ef444420';icon='🔴';}else if(conf>=2.5){level='WATCH';color='#eab308';bg='#eab30820';icon='👀';}else{level='HOLD';color='#64748b';bg='#64748b20';icon='⚪';} return{confluence:Math.round(conf*10)/10,level,color,bg,icon,factors,trade:{entry:Math.round(entry*100)/100,stopLoss:Math.round(sl*100)/100,target1:Math.round(t1*100)/100,riskReward:rr,riskPerShare:Math.round(rps*100)/100,rewardPerShare:Math.round(rwps*100)/100}}; };
+  const getSmartAlert = (asset) => { let factors=[],conf=0; if(asset.poc_price&&asset.price){const d=Math.abs((asset.price-asset.poc_price)/asset.price*100);if(d<=2){conf+=2;factors.push({name:'POC',score:2,max:2,detail:d.toFixed(1)+'%',pass:true});}else factors.push({name:'POC',score:0,max:2,detail:d.toFixed(1)+'%',pass:false});} const bp=(asset.candlestick_patterns||[]).filter(p=>p.type==='bullish');if(bp.length>0){conf+=1.5;factors.push({name:'Pattern',score:1.5,max:1.5,detail:bp.map(p=>p.name).join(','),pass:true});}else factors.push({name:'Pattern',score:0,max:1.5,detail:'None',pass:false}); if(asset.rsi>=40&&asset.rsi<=60){conf+=1;factors.push({name:'RSI',score:1,max:1,detail:''+asset.rsi?.toFixed(0),pass:true});}else factors.push({name:'RSI',score:0,max:1,detail:''+asset.rsi?.toFixed(0),pass:false}); if(asset.macd?.histogram>0){conf+=1;factors.push({name:'MACD',score:1,max:1,detail:'+',pass:true});}else factors.push({name:'MACD',score:0,max:1,detail:'-',pass:false}); if(asset.price>asset.ema10&&asset.ema10>asset.ema20&&asset.ema20>asset.ema50){conf+=1.5;factors.push({name:'EMA',score:1.5,max:1.5,detail:'Up',pass:true});}else if(asset.price>asset.ema20&&asset.ema20>asset.ema50){conf+=0.75;factors.push({name:'EMA',score:0.75,max:1.5,detail:'Mid',pass:true});}else factors.push({name:'EMA',score:0,max:1.5,detail:'No',pass:false}); if(asset.relative_volume>=1.5){conf+=1;factors.push({name:'Vol',score:1,max:1,detail:asset.relative_volume?.toFixed(1)+'x',pass:true});}else factors.push({name:'Vol',score:0,max:1,detail:asset.relative_volume?.toFixed(1)+'x',pass:false}); return {confluence:Math.round(conf*10)/10,factors}; };
 
-  const getBottomSignal = (a) => { let s=0;if(a.rsi<=30)s+=3;else if(a.rsi<=40)s+=2;if(a.value_area_low&&a.price){const d=((a.price-a.value_area_low)/a.price*100);if(d<=2&&d>=-5)s+=2;}if(a.low_52w&&a.price){const d=((a.price-a.low_52w)/a.low_52w*100);if(d<=15)s+=1.5;}const br=(a.candlestick_patterns||[]).filter(p=>p.type==='bullish'&&['Hammer','Morning Star','Bullish Engulfing'].includes(p.name));if(br.length>0)s+=2;if(a.relative_volume>=1.5)s+=1;if(a.price<a.ema50)s+=0.5;return{score:Math.round(s*10)/10}; };
+  // ============================================
+  // 🆕 AGENTS VIEW HELPERS
+  // ============================================
+  const AGENT_INFO = {
+    macro_analyst: { emoji: '🌍', name: 'Macro Analyst', desc: 'Economia, indici, settori, regime di mercato', color: '#3b82f6' },
+    alpha_strategist: { emoji: '🎯', name: 'Alpha Strategist', desc: 'Stock picking, confluence, segnali buy/sell', color: '#22c55e' },
+    risk_manager: { emoji: '🛡️', name: 'Risk Manager', desc: 'Position sizing, limiti rischio, protezione drawdown', color: '#eab308' },
+    executor: { emoji: '⚡', name: 'Executor', desc: 'Esecuzione ordini, Telegram, cancellazione stale', color: '#f97316' },
+  };
 
-  const bottomStocks = assets.map(a=>({...a,bottom:getBottomSignal(a)})).filter(a=>a.bottom.score>=3).sort((a,b)=>b.bottom.score-a.bottom.score);
-  const sectorChartData = sectors.map(s=>({name:s.code,score:s.composite_score,fill:getScoreColor(s.composite_score)}));
-  const smartAlerts = assets.map(a=>({...a,alert:getSmartAlert(a)})).filter(a=>a.alert.confluence>=4).sort((a,b)=>b.alert.confluence-a.alert.confluence);
-  const eliteAlerts = smartAlerts.filter(a=>a.alert.confluence>=8);
-  const strongAlerts = smartAlerts.filter(a=>a.alert.confluence>=6&&a.alert.confluence<8);
+  const getRegimeColor = (regime) => {
+    const map = { BULL:'#22c55e', NEUTRAL:'#eab308', BEAR:'#f97316', CRASH:'#ef4444' };
+    return map[regime] || '#94a3b8';
+  };
+  const getRegimeEmoji = (regime) => {
+    const map = { BULL:'🟢', NEUTRAL:'🟡', BEAR:'🟠', CRASH:'🔴' };
+    return map[regime] || '⚪';
+  };
 
-  if (loading) return <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',background:'#0f172a',color:'white',fontSize:24,flexDirection:'column',gap:16}}><div style={{fontSize:48}}>🔬</div><div>SwingLab Loading...</div></div>;
+  // ============================================
+  // RENDER — AGENTS VIEW
+  // ============================================
+  const renderAgentsView = () => {
+    const ps = agentsStatus?.pipeline_state;
+    const agents = agentsStatus?.agents || {};
+    const market = ps?.market || {};
+    const pipeline = ps?.pipeline || {};
+    const riskReport = ps?.risk_report || {};
 
-  if (selectedStock) { const a=selectedStock;const al=getSmartAlert(a);const pocDist=a.poc_price?Math.abs(((a.price-a.poc_price)/a.price)*100).toFixed(2):null;const sector=sectors.find(s=>s.code===a.sector_code);const lp=getLivePrice(a.ticker); return (
-    <div style={{background:'#0f172a',minHeight:'100vh',color:'#e2e8f0'}}>
-      <header style={{background:'#1e293b',padding:'16px 24px',borderBottom:'1px solid #334155',display:'flex',justifyContent:'space-between',alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:28}}>🔬</span><h1 style={{margin:0,fontSize:22,fontWeight:700}}>SwingLab</h1></div><button onClick={()=>setSelectedStock(null)} style={{background:'#334155',color:'white',border:'none',padding:'8px 16px',borderRadius:8,cursor:'pointer',fontWeight:600}}>Back</button></header>
-      <main style={{padding:24,maxWidth:900,margin:'0 auto'}}>
-        <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:16}}><div><h2 style={{margin:0,fontSize:32,fontWeight:700}}>{a.ticker}</h2><p style={{color:'#94a3b8',margin:'4px 0',fontSize:14}}>{a.name} - {sector?.name||a.sector_code}</p><p style={{fontSize:36,fontWeight:700,margin:'8px 0'}}>${lp?lp.price:a.price?.toFixed(2)}{lp&&<span style={{fontSize:14,color:lp.change_pct>=0?'#22c55e':'#ef4444',marginLeft:8}}>({lp.change_pct>=0?'+':''}{lp.change_pct}%) LIVE</span>}</p><p style={{color:a.change_pct>=0?'#22c55e':'#ef4444',fontSize:16,fontWeight:600,margin:0}}>{a.change_pct>=0?'+':''}{a.change_pct?.toFixed(2)}%</p></div><div style={{textAlign:'center'}}><div style={{width:120,height:120,borderRadius:'50%',border:`6px solid ${al.color}`,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center'}}><span style={{fontSize:32,fontWeight:700,color:al.color}}>{al.confluence}</span><span style={{fontSize:10,color:'#94a3b8'}}>/ 10</span></div><div style={{marginTop:12,padding:'8px 20px',borderRadius:20,background:al.bg,color:al.color,fontWeight:700,fontSize:16}}>{al.icon} {al.level}</div></div></div></div>
-        <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Confluence ({al.confluence}/10)</h3><div style={{background:'#334155',borderRadius:8,height:12,marginBottom:20,overflow:'hidden'}}><div style={{width:`${(al.confluence/10)*100}%`,height:'100%',borderRadius:8,background:al.confluence>=8?'linear-gradient(90deg,#f59e0b,#ef4444)':al.confluence>=6?'linear-gradient(90deg,#22c55e,#4ade80)':'linear-gradient(90deg,#3b82f6,#60a5fa)'}}/></div>{al.factors.map((f,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:12,padding:'8px 0',borderBottom:i<al.factors.length-1?'1px solid #334155':'none'}}><span style={{fontSize:18,width:24}}>{f.pass?'✅':'❌'}</span><div style={{flex:1}}><p style={{margin:0,fontSize:13,fontWeight:600,color:f.pass?'#e2e8f0':'#64748b'}}>{f.name}</p><p style={{margin:0,fontSize:11,color:'#94a3b8'}}>{f.detail}</p></div><span style={{fontSize:13,fontWeight:700,color:f.pass?'#22c55e':'#64748b'}}>{f.score}/{f.max}</span></div>))}</div>
-        <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Trade Plan</h3><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center',borderLeft:'4px solid #3b82f6'}}><p style={{color:'#3b82f6',fontSize:11,margin:0}}>ENTRY</p><p style={{fontSize:22,fontWeight:700,color:'#3b82f6',margin:'4px 0'}}>${al.trade.entry}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center',borderLeft:'4px solid #ef4444'}}><p style={{color:'#ef4444',fontSize:11,margin:0}}>STOP</p><p style={{fontSize:22,fontWeight:700,color:'#ef4444',margin:'4px 0'}}>${al.trade.stopLoss}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center',borderLeft:'4px solid #22c55e'}}><p style={{color:'#22c55e',fontSize:11,margin:0}}>TARGET</p><p style={{fontSize:22,fontWeight:700,color:'#22c55e',margin:'4px 0'}}>${al.trade.target1}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center',borderLeft:'4px solid #eab308'}}><p style={{color:'#eab308',fontSize:11,margin:0}}>R:R</p><p style={{fontSize:22,fontWeight:700,color:'#eab308',margin:'4px 0'}}>{al.trade.riskReward}:1</p></div></div></div>
-        {alpacaData?.connected&&(<div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Trade with Alpaca {alpacaData.paper?'(Paper)':''}</h3>{(()=>{const pos=calcPositionSize(al.trade.entry,al.trade.stopLoss);const has=alpacaData.positions?.find(p=>p.symbol===a.ticker);return(<div><div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#f59e0b',fontSize:11,margin:0}}>Shares</p><p style={{fontSize:28,fontWeight:700,color:'#f59e0b',margin:'4px 0'}}>{pos.shares}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#64748b',fontSize:11,margin:0}}>Cost</p><p style={{fontSize:20,fontWeight:700,margin:'4px 0'}}>${pos.totalValue.toLocaleString()}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#ef4444',fontSize:11,margin:0}}>Max Loss</p><p style={{fontSize:20,fontWeight:700,color:'#ef4444',margin:'4px 0'}}>${pos.totalRisk}</p></div></div><div style={{display:'flex',gap:8}}>{has?<button onClick={()=>alpacaClose(a.ticker)} style={{background:'#ef4444',color:'white',border:'none',padding:'14px',borderRadius:8,cursor:'pointer',fontWeight:700,flex:1}}>Close Position</button>:<><button onClick={()=>{if(window.confirm('Buy '+pos.shares+' '+a.ticker+'?'))alpacaBuy(a.ticker,pos.shares);}} style={{background:'#22c55e',color:'white',border:'none',padding:'14px',borderRadius:8,cursor:'pointer',fontWeight:700,flex:1}}>BUY {pos.shares}</button><button onClick={()=>{if(window.confirm('Buy 1 '+a.ticker+'?'))alpacaBuy(a.ticker,1);}} style={{background:'#334155',color:'#22c55e',border:'1px solid #22c55e',padding:'14px',borderRadius:8,cursor:'pointer',fontWeight:700}}>Buy 1</button></>}</div>{has&&<p style={{color:'#22c55e',fontSize:12,marginTop:8}}>Holding {has.qty} @ ${has.entry_price} (P&L: {has.pnl>=0?'+':''}${has.pnl})</p>}</div>);})()}</div>)}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24}}><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>Setup</p><div style={{marginTop:8}}>{getSetupBadge(a.setup_type)}</div></div><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>RSI</p><p style={{fontSize:24,fontWeight:700,margin:'4px 0',color:a.rsi>70?'#ef4444':a.rsi<30?'#22c55e':'#e2e8f0'}}>{a.rsi?.toFixed(1)}</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>MACD</p><p style={{fontSize:24,fontWeight:700,margin:'4px 0',color:a.macd?.histogram>0?'#22c55e':'#ef4444'}}>{a.macd?.histogram?.toFixed(4)}</p></div><div style={{background:'#1e293b',borderRadius:12,padding:16}}><p style={{color:'#64748b',fontSize:12,margin:0}}>Volume</p><p style={{fontSize:24,fontWeight:700,margin:'4px 0',color:a.relative_volume>=1.5?'#eab308':'#e2e8f0'}}>{a.relative_volume?.toFixed(2)}x</p></div></div>
-        <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Volume Profile</h3><div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#8b5cf6',fontSize:12,margin:0}}>POC</p><p style={{fontSize:28,fontWeight:700,color:'#8b5cf6',margin:'8px 0'}}>{a.poc_price?`$${a.poc_price}`:'N/A'}</p>{pocDist&&<p style={{fontSize:12,color:'#94a3b8',margin:0}}>{pocDist}%</p>}</div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#22c55e',fontSize:12,margin:0}}>VA High</p><p style={{fontSize:28,fontWeight:700,color:'#22c55e',margin:'8px 0'}}>{a.value_area_high?`$${a.value_area_high}`:'N/A'}</p></div><div style={{background:'#0f172a',borderRadius:12,padding:16,textAlign:'center'}}><p style={{color:'#ef4444',fontSize:12,margin:0}}>VA Low</p><p style={{fontSize:28,fontWeight:700,color:'#ef4444',margin:'8px 0'}}>{a.value_area_low?`$${a.value_area_low}`:'N/A'}</p></div></div></div>
-        {a.price_history&&a.price_history.length>5&&(<div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>Price Chart</h3><ResponsiveContainer width="100%" height={350}><AreaChart data={a.price_history} margin={{left:0,right:10,top:10,bottom:0}}><defs><linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d=>d.slice(5)} interval={Math.floor(a.price_history.length/10)}/><YAxis yAxisId="price" stroke="#475569" fontSize={10} domain={['auto','auto']}/><Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0',fontSize:12}} formatter={(v,n)=>n==='close'?[`$${v}`,'Price']:n.includes('ema')?[`$${v}`,n.toUpperCase()]:[v,n]}/>{a.poc_price&&<ReferenceLine yAxisId="price" y={a.poc_price} stroke="#8b5cf6" strokeDasharray="5 5" strokeWidth={2}/>}{a.value_area_high&&<ReferenceLine yAxisId="price" y={a.value_area_high} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5}/>}{a.value_area_low&&<ReferenceLine yAxisId="price" y={a.value_area_low} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5}/>}<Area yAxisId="price" type="monotone" dataKey="close" stroke="#3b82f6" strokeWidth={2} fill="url(#priceGrad)" dot={false}/><Line yAxisId="price" type="monotone" dataKey="ema10" stroke="#22c55e" strokeWidth={1} dot={false}/><Line yAxisId="price" type="monotone" dataKey="ema20" stroke="#eab308" strokeWidth={1} strokeDasharray="4 4" dot={false}/><Line yAxisId="price" type="monotone" dataKey="ema50" stroke="#ef4444" strokeWidth={1} strokeDasharray="4 4" dot={false}/></AreaChart></ResponsiveContainer><div style={{display:'flex',justifyContent:'center',gap:16,marginTop:8,fontSize:10}}><span style={{color:'#3b82f6'}}>Price</span><span style={{color:'#22c55e'}}>EMA10</span><span style={{color:'#eab308'}}>EMA20</span><span style={{color:'#ef4444'}}>EMA50</span><span style={{color:'#8b5cf6'}}>POC</span></div><div style={{marginTop:16}}><p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>RSI</p><ResponsiveContainer width="100%" height={100}><AreaChart data={a.price_history} margin={{left:0,right:10,top:5,bottom:0}}><XAxis dataKey="date" stroke="#475569" fontSize={9} tickFormatter={d=>d.slice(5)} interval={Math.floor(a.price_history.length/10)}/><YAxis stroke="#475569" fontSize={9} domain={[0,100]}/><ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5}/><ReferenceLine y={30} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5}/><Area type="monotone" dataKey="rsi" stroke="#8b5cf6" strokeWidth={1.5} fill="none" dot={false}/></AreaChart></ResponsiveContainer></div></div>)}
-        <div style={{background:'#1e293b',borderRadius:16,padding:24}}><h3 style={{margin:'0 0 16px',fontSize:16,fontWeight:600}}>EMA Structure</h3><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>{[{l:'Price',v:a.price,c:'#f1f5f9'},{l:'EMA10',v:a.ema10,c:'#3b82f6'},{l:'EMA20',v:a.ema20,c:'#eab308'},{l:'EMA50',v:a.ema50,c:'#ef4444'}].map(e=><div key={e.l} style={{background:'#0f172a',borderRadius:12,padding:16,borderLeft:`4px solid ${e.c}`}}><p style={{color:'#64748b',fontSize:12,margin:0}}>{e.l}</p><p style={{fontSize:20,fontWeight:700,color:e.c,margin:'4px 0'}}>${e.v?.toFixed(2)}</p></div>)}</div></div>
-      </main>
-    </div>); }
     return (
-    <div style={{background:'#0f172a',minHeight:'100vh',color:'#e2e8f0'}}>
-      <header style={{background:'#1e293b',padding:'16px 24px',borderBottom:'1px solid #334155',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
-        <div style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:28}}>🔬</span><div><h1 style={{margin:0,fontSize:22,fontWeight:700}}>SwingLab</h1><p style={{margin:0,fontSize:12,color:'#64748b'}}>Swing Trading Analysis</p></div></div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}><input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSearch()} placeholder="Search ticker..." style={{background:'#334155',color:'white',border:'1px solid #475569',padding:'8px 12px',borderRadius:8,fontSize:13,width:140,outline:'none'}}/><button onClick={handleSearch} disabled={searching} style={{background:'#8b5cf6',color:'white',border:'none',padding:'8px 12px',borderRadius:8,cursor:'pointer',fontWeight:600}}>{searching?'...':'🔍'}</button></div>
-        <div style={{display:'flex',gap:8}}>{['dashboard','poc','scanner','trader'].map(v=>(<button key={v} onClick={()=>{setView(v);setSelectedSector(null);}} style={{background:view===v?'#3b82f6':'#334155',color:'white',border:'none',padding:'8px 16px',borderRadius:8,cursor:'pointer',fontWeight:600,fontSize:13}}>{v==='dashboard'?'Dashboard':v==='poc'?'POC Scanner':v==='scanner'?'Scanner':'AutoTrader'}</button>))}</div>
-      </header>
-
-      <main style={{padding:24,maxWidth:1200,margin:'0 auto'}}>
-
-        {view==='dashboard'&&(<>
-          {eliteAlerts.length>0&&(<div style={{background:'linear-gradient(135deg,#f59e0b20,#ef444420)',border:'2px solid #f59e0b',borderRadius:16,padding:20,marginBottom:24}}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:8}}><span style={{fontSize:24}}>🔥🔥🔥</span><h3 style={{margin:0,fontSize:18,fontWeight:700,color:'#f59e0b'}}>ELITE SETUP!</h3></div><div style={{display:'flex',gap:16,flexWrap:'wrap'}}>{eliteAlerts.map(a=><span key={a.ticker} style={{background:'#f59e0b30',color:'#f59e0b',padding:'6px 16px',borderRadius:20,fontWeight:700}}>{a.ticker} ({a.alert.confluence}/10)</span>)}</div></div>)}
-          {eliteAlerts.length===0&&strongAlerts.length>0&&(<div style={{background:'#22c55e10',border:'1px solid #22c55e40',borderRadius:16,padding:20,marginBottom:24}}><div style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:20}}>🔥🔥</span><h3 style={{margin:0,fontSize:16,fontWeight:700,color:'#22c55e'}}>{strongAlerts.length} Strong Buy</h3><div style={{display:'flex',gap:8}}>{strongAlerts.slice(0,5).map(a=><span key={a.ticker} style={{background:'#22c55e20',color:'#22c55e',padding:'2px 10px',borderRadius:12,fontSize:12,fontWeight:700}}>{a.ticker}</span>)}</div></div></div>)}
-          {bottomStocks.length>0&&(<div style={{background:'#f9731610',border:'1px solid #f9731640',borderRadius:12,padding:16,marginBottom:16}}><span style={{color:'#f97316',fontWeight:700}}>🔴 {bottomStocks.length} bottom signals</span><span style={{color:'#94a3b8',fontSize:12,marginLeft:12}}>{bottomStocks.slice(0,5).map(a=>a.ticker).join(', ')}</span></div>)}
-
-          {alpacaData?.connected&&(<div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:16,border:'1px solid #334155'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><h3 style={{margin:0,fontSize:15,fontWeight:600}}>Portfolio {alpacaData.paper?'(Paper)':''}</h3><button onClick={fetchAlpaca} style={{background:'#334155',color:'#94a3b8',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11}}>Refresh</button></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:12}}><div style={{textAlign:'center'}}><p style={{color:'#64748b',fontSize:10,margin:0}}>Equity</p><p style={{fontSize:20,fontWeight:700,margin:'4px 0'}}>${alpacaData.equity?.toLocaleString()}</p></div><div style={{textAlign:'center'}}><p style={{color:'#64748b',fontSize:10,margin:0}}>Cash</p><p style={{fontSize:20,fontWeight:700,margin:'4px 0'}}>${alpacaData.cash?.toLocaleString()}</p></div><div style={{textAlign:'center'}}><p style={{color:'#64748b',fontSize:10,margin:0}}>P&L</p><p style={{fontSize:20,fontWeight:700,color:alpacaData.daily_pnl>=0?'#22c55e':'#ef4444',margin:'4px 0'}}>{alpacaData.daily_pnl>=0?'+':''}${alpacaData.daily_pnl?.toFixed(2)}</p></div><div style={{textAlign:'center'}}><p style={{color:'#64748b',fontSize:10,margin:0}}>Positions</p><p style={{fontSize:20,fontWeight:700,margin:'4px 0'}}>{alpacaData.positions?.length||0}</p></div></div>{alpacaData.positions?.length>0&&(<div style={{marginTop:12,display:'flex',gap:8,flexWrap:'wrap'}}>{alpacaData.positions.map((p,i)=><span key={i} style={{background:p.pnl>=0?'#22c55e15':'#ef444415',color:p.pnl>=0?'#22c55e':'#ef4444',padding:'4px 10px',borderRadius:8,fontSize:11,fontWeight:600}}>{p.symbol} {p.pnl>=0?'+':''}{p.pnl_pct?.toFixed(1)}%</span>)}</div>)}</div>)}
-
-{Object.keys(marketData).length>0&&(<div style={{background:'#1e293b',borderRadius:12,padding:16,marginBottom:16}}><div style={{display:'flex',gap:16,flexWrap:'wrap',justifyContent:'center'}}>{[{sym:'SPY',label:'S&P 500',icon:'📈'},{sym:'QQQ',label:'NASDAQ',icon:'💻'},{sym:'IWM',label:'Russell 2K',icon:'📊'},{sym:'BTC/USD',label:'Bitcoin',icon:'₿'},{sym:'ETH/USD',label:'Ethereum',icon:'⟠'},{sym:'FXE',label:'EUR/USD',icon:'💶'}].map(({sym,label,icon})=>{const d=marketData[sym];if(!d)return null;return(<div key={sym} style={{textAlign:'center',minWidth:100}}><p style={{color:'#64748b',fontSize:10,margin:0}}>{icon} {label}</p><p style={{fontSize:16,fontWeight:700,margin:'2px 0'}}>${typeof d.price==='number'?d.price.toLocaleString():d.price}</p><p style={{color:d.change_pct>=0?'#22c55e':'#ef4444',fontSize:11,fontWeight:600,margin:0}}>{d.change_pct>=0?'+':''}{d.change_pct}%</p></div>);})}</div></div>)}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16,marginBottom:24}}>
-            <div style={{background:'#1e293b',borderRadius:12,padding:20,borderLeft:'4px solid #3b82f6'}}><p style={{color:'#64748b',fontSize:13,margin:0}}>Sectors</p><p style={{fontSize:28,fontWeight:700,margin:'8px 0 0'}}>{sectors.length}</p></div>
-            <div style={{background:'#1e293b',borderRadius:12,padding:20,borderLeft:'4px solid #22c55e'}}><p style={{color:'#64748b',fontSize:13,margin:0}}>Stocks</p><p style={{fontSize:28,fontWeight:700,margin:'8px 0 0'}}>{assets.length}</p></div>
-            <div style={{background:'#1e293b',borderRadius:12,padding:20,borderLeft:'4px solid #f59e0b'}}><p style={{color:'#64748b',fontSize:13,margin:0}}>Alerts</p><p style={{fontSize:28,fontWeight:700,margin:'8px 0 0',color:'#f59e0b'}}>{smartAlerts.length}</p></div>
-            <div style={{background:'#1e293b',borderRadius:12,padding:20,borderLeft:'4px solid #8b5cf6'}}><p style={{color:'#64748b',fontSize:13,margin:0}}>Best</p><p style={{fontSize:20,fontWeight:700,margin:'8px 0 0'}}>{smartAlerts[0]?.ticker||'-'} ({smartAlerts[0]?.alert.confluence||0}/10)</p></div>
+      <div>
+        {/* Header with actions */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+          <h2 style={{margin:0}}>🤖 Multi-Agent AI System</h2>
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={runPipeline} disabled={pipelineRunning}
+              style={{padding:'8px 16px',background:pipelineRunning?'#334155':'#3b82f6',color:'white',border:'none',borderRadius:8,cursor:'pointer',fontWeight:600}}>
+              {pipelineRunning ? '⏳ Running...' : '▶️ Run Pipeline'}
+            </button>
+            <button onClick={runLearning} disabled={learningRunning}
+              style={{padding:'8px 16px',background:learningRunning?'#334155':'#8b5cf6',color:'white',border:'none',borderRadius:8,cursor:'pointer',fontWeight:600}}>
+              {learningRunning ? '⏳ Learning...' : '🧬 Learn All'}
+            </button>
+            <button onClick={fetchAgentsStatus} disabled={agentsLoading}
+              style={{padding:'8px 16px',background:'#1e293b',color:'#94a3b8',border:'1px solid #334155',borderRadius:8,cursor:'pointer'}}>
+              🔄 Refresh
+            </button>
           </div>
+        </div>
 
-          <div style={{background:'#1e293b',borderRadius:8,padding:'10px 16px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}><span style={{color:'#64748b',fontSize:12}}>Last refresh: <strong style={{color:'#f1f5f9'}}>{sectors[0]?.updated_at?new Date(sectors[0].updated_at).toLocaleString():'Never'}</strong> {Object.keys(livePrices).length>0&&<span style={{color:'#22c55e',marginLeft:8,fontSize:10}}>● LIVE</span>}</span><div style={{display:'flex',gap:8}}><button onClick={fetchData} style={{background:'#334155',color:'#94a3b8',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11}}>Refresh UI</button><button onClick={async()=>{try{const btn=document.getElementById('refreshBtn');btn.textContent='Refreshing...';btn.disabled=true;await fetch(`${API}/api/data/refresh/all`,{method:'POST'});await fetchData();await fetchAlpaca();btn.textContent='Done ✅';setTimeout(()=>{btn.textContent='Refresh Data';btn.disabled=false;},3000);}catch(e){alert('Failed');}}} id="refreshBtn" style={{background:'#3b82f6',color:'white',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Refresh Data</button></div></div>
+        {/* Pipeline Status Bar */}
+        {ps && (
+          <div style={{background:'#0f172a',borderRadius:12,padding:16,marginBottom:20,border:'1px solid #1e293b'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <span style={{color:'#94a3b8',fontSize:13}}>Last Run: {ps.last_run ? new Date(ps.last_run).toLocaleString() : 'Never'}</span>
+              <span style={{color:'#94a3b8',fontSize:13}}>
+                {pipeline.timing?.total && `⏱️ ${pipeline.timing.total}s`}
+                {pipeline.errors?.length > 0 && ` | ⚠️ ${pipeline.errors.length} errors`}
+              </span>
+            </div>
+            {/* Agent pipeline flow */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:0}}>
+              {['macro_analyst','alpha_strategist','risk_manager','executor'].map((name, i) => {
+                const info = AGENT_INFO[name];
+                const stepStatus = pipeline.steps?.[name] || 'unknown';
+                const borderColor = stepStatus === 'ok' ? info.color : stepStatus === 'error' ? '#ef4444' : '#334155';
+                return (
+                  <React.Fragment key={name}>
+                    {i > 0 && <div style={{color:'#475569',fontSize:20,margin:'0 4px'}}>→</div>}
+                    <div onClick={() => { setSelectedAgent(name); fetchAgentDecisions(name); }}
+                      style={{background:'#1e293b',borderRadius:10,padding:'10px 16px',border:`2px solid ${borderColor}`,cursor:'pointer',textAlign:'center',minWidth:130,transition:'all 0.2s'}}>
+                      <div style={{fontSize:20}}>{info.emoji}</div>
+                      <div style={{color:'white',fontSize:12,fontWeight:600,marginTop:2}}>{info.name}</div>
+                      <div style={{color:borderColor,fontSize:10,marginTop:2}}>
+                        {stepStatus === 'ok' ? '✅ OK' : stepStatus === 'error' ? '❌ Error' : '⏳'}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-          <div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:24}}><h3 style={{margin:'0 0 16px',fontSize:15,fontWeight:600}}>Sector Performance</h3><ResponsiveContainer width="100%" height={320}><BarChart data={sectors.map(s=>{const sa=assets.filter(a=>a.sector_code===s.code);const t=sa.length||1;return{name:s.code,return20d:s.return_20d||0,breadth:Math.round(sa.filter(a=>a.price>a.ema50).length/t*100)};}).sort((a,b)=>b.return20d-a.return20d)} layout="vertical" margin={{left:10,right:20}}><XAxis type="number" stroke="#475569" fontSize={10} tickFormatter={v=>v+'%'}/><YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={45}/><Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0'}}/><Bar dataKey="return20d" radius={[0,6,6,0]} barSize={14}>{sectors.map((s,i)=><Cell key={i} fill={s.return_20d>=0?'#22c55e':'#ef4444'}/>)}</Bar><Bar dataKey="breadth" radius={[0,4,4,0]} barSize={10} opacity={0.5}>{sectors.map((s,i)=>{const sa=assets.filter(a=>a.sector_code===s.code);const b=sa.length>0?sa.filter(a=>a.price>a.ema50).length/sa.length*100:50;return<Cell key={i} fill={b>60?'#3b82f680':b>40?'#eab30880':'#ef444480'}/>;})}</Bar></BarChart></ResponsiveContainer><div style={{display:'flex',justifyContent:'center',gap:20,marginTop:8,fontSize:10}}><span><span style={{color:'#22c55e'}}>■</span> Return 20d</span><span><span style={{color:'#3b82f6'}}>■</span> Breadth</span></div></div>
-
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8,marginBottom:24}}>{sectors.map(s=>{const sa=assets.filter(a=>a.sector_code===s.code);const t=sa.length||1;const b=Math.round(sa.filter(a=>a.price>a.ema50).length/t*100);return(<div key={s.code} onClick={()=>{setSelectedSector(s.code);setView('scanner');}} style={{background:'#1e293b',borderRadius:10,padding:12,cursor:'pointer',border:'1px solid #334155'}} onMouseOver={e=>e.currentTarget.style.borderColor='#3b82f6'} onMouseOut={e=>e.currentTarget.style.borderColor='#334155'}><div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span style={{fontWeight:700,fontSize:13}}>{s.code}</span><span style={{color:s.return_20d>=0?'#22c55e':'#ef4444',fontSize:12,fontWeight:600}}>{s.return_20d>=0?'+':''}{s.return_20d?.toFixed(1)}%</span></div><div style={{background:'#334155',borderRadius:4,height:6,marginBottom:6,overflow:'hidden'}}><div style={{width:b+'%',height:'100%',borderRadius:4,background:b>60?'#22c55e':b>40?'#eab308':'#ef4444'}}/></div><div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#64748b'}}><span>Breadth {b}%</span><span>${s.price?.toFixed(0)}</span></div></div>);})}</div>
-        </>)}
-
-        {view==='poc'&&(()=>{const ps=[...assets].filter(a=>a.poc_price&&a.price).map(a=>({...a,poc_distance:Math.abs(((a.price-a.poc_price)/a.price)*100),poc_position:a.price>=a.poc_price?'above':'below'})).sort((a,b)=>a.poc_distance-b.poc_distance);const atP=ps.filter(a=>a.poc_distance<=1);const nearP=ps.filter(a=>a.poc_distance<=3);return(<><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:8}}><div><h2 style={{fontSize:20,fontWeight:700,margin:0}}>POC Scanner</h2><p style={{color:'#94a3b8',margin:'4px 0 0',fontSize:14}}>Stocks closest to POC</p></div><div style={{display:'flex',gap:12}}><div style={{background:'#8b5cf620',borderRadius:8,padding:'8px 16px',textAlign:'center'}}><p style={{color:'#8b5cf6',fontSize:22,fontWeight:700,margin:0}}>{atP.length}</p><p style={{color:'#94a3b8',fontSize:11,margin:0}}>AT POC</p></div><div style={{background:'#3b82f620',borderRadius:8,padding:'8px 16px',textAlign:'center'}}><p style={{color:'#3b82f6',fontSize:22,fontWeight:700,margin:0}}>{nearP.length}</p><p style={{color:'#94a3b8',fontSize:11,margin:0}}>NEAR</p></div></div></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(350px,1fr))',gap:16,marginTop:20}}>{ps.slice(0,20).map(a=>{const al=getSmartAlert(a);const dist=a.vp_distribution||[];const lp=getLivePrice(a.ticker);return(<div key={a.ticker} onClick={()=>setSelectedStock(a)} style={{background:'#1e293b',borderRadius:16,padding:20,cursor:'pointer',border:a.poc_distance<=1?'2px solid #8b5cf6':a.poc_distance<=3?'1px solid #3b82f6':'1px solid #334155'}} onMouseOver={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseOut={e=>e.currentTarget.style.transform='translateY(0)'}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><div style={{display:'flex',alignItems:'center',gap:8}}><span style={{fontSize:18,fontWeight:700}}>{a.ticker}</span><span style={{color:'#94a3b8',fontSize:12}}>{a.sector_code}</span>{a.poc_distance<=1&&<span style={{background:'#8b5cf620',color:'#8b5cf6',padding:'2px 8px',borderRadius:12,fontSize:10,fontWeight:700}}>AT POC</span>}</div><span style={{background:al.bg,color:al.color,padding:'4px 10px',borderRadius:16,fontSize:12,fontWeight:700}}>{al.icon} {al.level}</span></div><div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}><div><p style={{fontSize:24,fontWeight:700,margin:0}}>${lp?lp.price:a.price?.toFixed(2)}{lp&&<span style={{fontSize:9,color:'#22c55e'}}> LIVE</span>}</p><p style={{color:a.change_pct>=0?'#22c55e':'#ef4444',fontSize:13,margin:'2px 0 0',fontWeight:600}}>{a.change_pct>=0?'+':''}{a.change_pct?.toFixed(2)}%</p></div><div style={{textAlign:'right'}}><p style={{color:'#8b5cf6',fontSize:12,margin:0}}>POC</p><p style={{color:'#8b5cf6',fontSize:20,fontWeight:700,margin:0}}>${a.poc_price?.toFixed(2)}</p><p style={{color:a.poc_distance<=1?'#8b5cf6':'#94a3b8',fontSize:12,margin:0,fontWeight:600}}>{a.poc_distance?.toFixed(2)}% {a.poc_position}</p></div></div>{dist.length>0&&(<div style={{marginBottom:12}}><div style={{display:'flex',flexDirection:'column',gap:1}}>{dist.map((d,idx)=><div key={idx} style={{display:'flex',alignItems:'center',gap:4,height:7}}><span style={{fontSize:7,color:'#64748b',width:40,textAlign:'right'}}>{d.price}</span><div style={{flex:1,height:'100%',background:'#0f172a',borderRadius:2,overflow:'hidden'}}><div style={{width:d.volume_pct+'%',height:'100%',borderRadius:2,background:d.is_poc?'#8b5cf6':d.in_value_area?'#3b82f680':'#475569'}}/></div></div>)}</div></div>)}<div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{getSetupBadge(a.setup_type)}<span style={{background:'#64748b20',color:'#94a3b8',padding:'2px 8px',borderRadius:12,fontSize:10}}>Score {a.setup_score}</span></div></div>);})}</div></>);})()}
-
-        {view==='scanner'&&(<><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}><h2 style={{fontSize:18,fontWeight:600,margin:0}}>{selectedSector?selectedSector+' Stocks':'All Stocks'}</h2>{selectedSector&&<button onClick={()=>setSelectedSector(null)} style={{background:'#334155',color:'white',border:'none',padding:'6px 12px',borderRadius:6,cursor:'pointer',fontSize:12}}>Clear</button>}</div><div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{sectors.map(s=><button key={s.code} onClick={()=>setSelectedSector(s.code)} style={{background:selectedSector===s.code?'#3b82f6':'#334155',color:'white',border:'none',padding:'6px 12px',borderRadius:6,cursor:'pointer',fontSize:12}}>{s.code}</button>)}</div><div style={{background:'#1e293b',borderRadius:12,overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid #334155'}}>{['Ticker','Price','Chg%','Signal','Score','Setup','RSI','POC','Wyckoff','Accum'].map(h=><th key={h} style={{padding:'10px 12px',textAlign:'left',color:'#64748b',fontSize:11,fontWeight:600}}>{h}</th>)}</tr></thead><tbody>{[...filteredAssets].sort((a,b)=>b.setup_score-a.setup_score).map((a,i)=>{const al=getSmartAlert(a);const lp=getLivePrice(a.ticker);return(<tr key={a.ticker} onClick={()=>setSelectedStock(a)} style={{borderBottom:'1px solid #1e293b',background:i%2===0?'#1e293b':'#162032',cursor:'pointer'}} onMouseOver={e=>e.currentTarget.style.background='#253048'} onMouseOut={e=>e.currentTarget.style.background=i%2===0?'#1e293b':'#162032'}><td style={{padding:'10px 12px',fontWeight:700,color:'#f1f5f9'}}>{a.ticker}</td><td style={{padding:'10px 12px'}}>{lp?<span style={{color:lp.change_pct>=0?'#22c55e':'#ef4444'}}>${lp.price}<span style={{fontSize:8}}> LIVE</span></span>:'$'+a.price?.toFixed(2)}</td><td style={{padding:'10px 12px'}}>{(()=>{const ch=lp?lp.change_pct:a.change_pct;return<span style={{color:ch>=0?'#22c55e':'#ef4444'}}>{ch>=0?'+':''}{ch?.toFixed(2)}%</span>;})()}</td><td style={{padding:'10px 12px'}}><span style={{background:al.bg,color:al.color,padding:'2px 8px',borderRadius:12,fontSize:11,fontWeight:600}}>{al.icon} {al.level}</span></td><td style={{padding:'10px 12px'}}><span style={{color:getScoreColor(a.setup_score),fontWeight:700}}>{a.setup_score}</span></td><td style={{padding:'10px 12px'}}>{getSetupBadge(a.setup_type)}</td><td style={{padding:'10px 12px',color:a.rsi>70?'#ef4444':a.rsi<30?'#22c55e':'#e2e8f0'}}>{a.rsi?.toFixed(1)}</td><td style={{padding:'10px 12px',color:'#8b5cf6',fontSize:12}}>{a.poc_price?'$'+a.poc_price:'-'}</td><td style={{padding:'10px 12px',fontSize:11}}>{(()=>{const w=a.wyckoff?.phase||'-';const c={accumulation:'#22c55e',markup:'#4ade80',distribution:'#ef4444',markdown:'#ef4444',spring:'#f59e0b'};return<span style={{color:c[w]||'#64748b'}}>{w}</span>;})()}</td><td style={{padding:'10px 12px'}}>{(()=>{const ac=a.accumulation?.score||0;return<span style={{color:ac>=70?'#22c55e':ac>=40?'#eab308':'#64748b',fontWeight:ac>=40?700:400}}>{ac}</span>;})()}</td></tr>);})}</tbody></table></div></>)}
-
-        {view==='trader'&&(<>
-          {!alpacaData?.connected?(<div style={{background:'#1e293b',borderRadius:12,padding:40,textAlign:'center'}}><p style={{fontSize:48}}>🔌</p><p style={{fontSize:18,color:'#94a3b8'}}>Connecting to Alpaca...</p><button onClick={fetchAlpaca} style={{background:'#3b82f6',color:'white',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700,marginTop:16}}>Retry</button></div>):(<>
-            {/* Hero Section */}
-            <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:16}}>
-                <div>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}><span style={{fontSize:20}}>🤖</span><span style={{color:'#94a3b8',fontSize:13}}>SwingLab AI Agent {alpacaData.paper?'• Paper Trading':'• LIVE'}</span><span style={{background:'#22c55e20',color:'#22c55e',padding:'2px 8px',borderRadius:12,fontSize:10,fontWeight:700}}>AUTONOMOUS</span></div>
-                  <p style={{fontSize:42,fontWeight:700,margin:'8px 0'}}>${alpacaData.equity?.toLocaleString()}</p>
-                  {(()=>{const first=alpacaData.equity_history?.[0]?.equity||alpacaData.equity;const pnl=alpacaData.equity-first;const pct=first>0?((alpacaData.equity-first)/first*100):0;return<div style={{display:'flex',gap:12,alignItems:'center'}}><span style={{color:pnl>=0?'#22c55e':'#ef4444',fontSize:18,fontWeight:700}}>{pnl>=0?'+':''}{pnl.toFixed(2)}</span><span style={{background:pct>=0?'#22c55e20':'#ef444420',color:pct>=0?'#22c55e':'#ef4444',padding:'4px 14px',borderRadius:20,fontWeight:700,fontSize:15}}>{pct>=0?'+':''}{pct.toFixed(2)}%</span></div>;})()}
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                  <div style={{background:'#0f172a',borderRadius:12,padding:14,textAlign:'center',minWidth:100}}><p style={{color:'#64748b',fontSize:10,margin:0}}>Cash</p><p style={{fontSize:18,fontWeight:700,margin:'4px 0'}}>${alpacaData.cash?.toLocaleString()}</p></div>
-                  <div style={{background:'#0f172a',borderRadius:12,padding:14,textAlign:'center',minWidth:100}}><p style={{color:'#64748b',fontSize:10,margin:0}}>Buying Power</p><p style={{fontSize:18,fontWeight:700,margin:'4px 0'}}>${alpacaData.buying_power?.toLocaleString()}</p></div>
-                  <div style={{background:'#0f172a',borderRadius:12,padding:14,textAlign:'center'}}><p style={{color:'#64748b',fontSize:10,margin:0}}>Positions</p><p style={{fontSize:18,fontWeight:700,margin:'4px 0'}}>{alpacaData.positions?.length||0}</p></div>
-                  <div style={{background:'#0f172a',borderRadius:12,padding:14,textAlign:'center'}}><p style={{color:'#64748b',fontSize:10,margin:0}}>Daily P&L</p><p style={{fontSize:18,fontWeight:700,color:alpacaData.daily_pnl>=0?'#22c55e':'#ef4444',margin:'4px 0'}}>{alpacaData.daily_pnl>=0?'+':''}${alpacaData.daily_pnl?.toFixed(2)}</p></div>
+        {/* Market Context Card */}
+        {market.regime && (
+          <div style={{background:'#0f172a',borderRadius:12,padding:16,marginBottom:20,border:'1px solid #1e293b'}}>
+            <h3 style={{margin:'0 0 12px',fontSize:15}}>🌍 Market Context</h3>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))',gap:12}}>
+              <div style={{background:'#1e293b',borderRadius:8,padding:12,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'#94a3b8'}}>Regime</div>
+                <div style={{fontSize:18,fontWeight:700,color:getRegimeColor(market.regime),marginTop:4}}>
+                  {getRegimeEmoji(market.regime)} {market.regime}
                 </div>
               </div>
-            </div>
-
-            {/* Equity Chart with Period Selector */}
-            <div style={{background:'#1e293b',borderRadius:16,padding:24,marginBottom:24}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-                <h3 style={{margin:0,fontSize:16,fontWeight:600}}>Performance</h3>
-                <div style={{display:'flex',gap:4}}>{['1W','1M','3M','6M','1Y','YTD'].map(p=>(<button key={p} onClick={()=>{setSelectedPeriod(p);}} style={{background:selectedPeriod===p?'#3b82f6':'#334155',color:'white',border:'none',padding:'6px 12px',borderRadius:6,cursor:'pointer',fontWeight:600,fontSize:11}}>{p}</button>))}</div>
+              <div style={{background:'#1e293b',borderRadius:8,padding:12,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'#94a3b8'}}>Confidence</div>
+                <div style={{fontSize:18,fontWeight:700,color:'white',marginTop:4}}>{market.confidence || 0}%</div>
               </div>
-              {(()=>{const chartData=equityPeriods[selectedPeriod]||alpacaData.equity_history||[];if(chartData.length<2)return<p style={{color:'#64748b',textAlign:'center',padding:40}}>No data for this period yet</p>;const first=chartData[0]?.equity||0;const last=chartData[chartData.length-1]?.equity||0;const pnl=last-first;const pct=first>0?((last-first)/first*100):0;const isUp=pnl>=0;return(<div><div style={{display:'flex',gap:16,marginBottom:12}}><span style={{color:isUp?'#22c55e':'#ef4444',fontWeight:700}}>{isUp?'+':''}${pnl.toFixed(2)}</span><span style={{color:isUp?'#22c55e':'#ef4444',fontWeight:700}}>({isUp?'+':''}{pct.toFixed(2)}%)</span><span style={{color:'#64748b',fontSize:12}}>{chartData[0]?.date} → {chartData[chartData.length-1]?.date}</span></div><ResponsiveContainer width="100%" height={300}><AreaChart data={chartData} margin={{left:10,right:10,top:10,bottom:0}}><defs><linearGradient id="eqUp" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/></linearGradient><linearGradient id="eqDown" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient></defs><XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={d=>d.slice(5)}/><YAxis stroke="#475569" fontSize={10} domain={['auto','auto']} tickFormatter={v=>'$'+Math.round(v/1000)+'k'}/><Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#e2e8f0'}} formatter={v=>['$'+v.toLocaleString(),'Equity']} labelFormatter={l=>''+l}/><ReferenceLine y={first} stroke="#475569" strokeDasharray="3 3"/><Area type="monotone" dataKey="equity" stroke={isUp?'#22c55e':'#ef4444'} strokeWidth={2} fill={isUp?'url(#eqUp)':'url(#eqDown)'} dot={false}/></AreaChart></ResponsiveContainer></div>);})()}
+              <div style={{background:'#1e293b',borderRadius:8,padding:12,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'#94a3b8'}}>Exposure</div>
+                <div style={{fontSize:18,fontWeight:700,color:'white',marginTop:4}}>{((market.exposure_multiplier||0)*100).toFixed(0)}%</div>
+              </div>
+              <div style={{background:'#1e293b',borderRadius:8,padding:12,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'#94a3b8'}}>Volatility</div>
+                <div style={{fontSize:14,fontWeight:600,color:market.volatility==='EXTREME'?'#ef4444':market.volatility==='HIGH'?'#f97316':'#22c55e',marginTop:4}}>{market.volatility || '—'}</div>
+              </div>
+              <div style={{background:'#1e293b',borderRadius:8,padding:12,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'#94a3b8'}}>Breadth</div>
+                <div style={{fontSize:14,fontWeight:600,color:'white',marginTop:4}}>{market.breadth_pct || 0}%</div>
+              </div>
+              <div style={{background:'#1e293b',borderRadius:8,padding:12,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'#94a3b8'}}>Rotation</div>
+                <div style={{fontSize:14,fontWeight:600,color:market.rotation==='defensive'?'#f97316':'#22c55e',marginTop:4}}>{market.rotation || '—'}</div>
+              </div>
             </div>
+          </div>
+        )}
 
-            {/* Risk Settings */}
-            <div style={{background:'#1e293b',borderRadius:12,padding:20,marginBottom:24}}><h3 style={{margin:'0 0 12px',fontSize:15,fontWeight:600}}>Risk Settings</h3><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12}}><div><p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>Capital ($)</p><input type="number" value={capital} onChange={e=>saveCapital(parseFloat(e.target.value)||0)} style={{background:'#334155',color:'white',border:'1px solid #475569',padding:'10px',borderRadius:8,fontSize:16,width:'100%',outline:'none',fontWeight:700}}/></div><div><p style={{color:'#64748b',fontSize:12,margin:'0 0 8px'}}>Risk %</p><div style={{display:'flex',gap:6}}>{[1,1.5,2,3,5].map(v=><button key={v} onClick={()=>saveRiskPct(v)} style={{background:riskPct===v?'#f59e0b':'#334155',color:'white',border:'none',padding:'10px 14px',borderRadius:8,cursor:'pointer',fontWeight:700,flex:1}}>{v}%</button>)}</div></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div style={{background:'#0f172a',borderRadius:8,padding:12,textAlign:'center'}}><p style={{color:'#f59e0b',fontSize:10,margin:0}}>Max/Trade</p><p style={{fontSize:18,fontWeight:700,color:'#f59e0b',margin:'4px 0'}}>${maxRiskPerTrade.toFixed(0)}</p></div><div style={{background:'#0f172a',borderRadius:8,padding:12,textAlign:'center'}}><p style={{color:parseFloat(riskUsedPct)>10?'#ef4444':'#22c55e',fontSize:10,margin:0}}>Risk Used</p><p style={{fontSize:18,fontWeight:700,color:parseFloat(riskUsedPct)>10?'#ef4444':'#22c55e',margin:'4px 0'}}>{riskUsedPct}%</p></div></div></div></div>
+        {/* Risk Report */}
+        {riskReport.equity && (
+          <div style={{background:'#0f172a',borderRadius:12,padding:16,marginBottom:20,border:'1px solid #1e293b'}}>
+            <h3 style={{margin:'0 0 12px',fontSize:15}}>🛡️ Risk Report</h3>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))',gap:10}}>
+              {[
+                {label:'Equity',value:`$${riskReport.equity?.toLocaleString()}`},
+                {label:'Cash',value:`$${riskReport.cash?.toLocaleString()}`},
+                {label:'Exposure',value:`${riskReport.total_exposure_pct||0}%`},
+                {label:'Positions',value:`${riskReport.current_positions||0}/${riskReport.max_positions||5}`},
+                {label:'Risk/Trade',value:`$${riskReport.risk_per_trade?.toFixed(0)||0}`},
+                {label:'Multiplier',value:`${((riskReport.final_multiplier||0)*100).toFixed(0)}%`},
+              ].map(item => (
+                <div key={item.label} style={{background:'#1e293b',borderRadius:8,padding:10,textAlign:'center'}}>
+                  <div style={{fontSize:10,color:'#94a3b8'}}>{item.label}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:'white',marginTop:2}}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+            {riskReport.loss_check && riskReport.loss_check.status !== 'allowed' && (
+              <div style={{marginTop:10,padding:8,background:riskReport.loss_check.status==='stopped'?'#7f1d1d':'#78350f',borderRadius:6,fontSize:12,color:'white'}}>
+                ⚠️ {riskReport.loss_check.reason}
+              </div>
+            )}
+          </div>
+        )}
 
-            {/* Positions */}
-            {alpacaData.positions&&alpacaData.positions.length>0&&(<div style={{marginBottom:24}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><h3 style={{fontSize:16,fontWeight:600,margin:0}}>Holdings ({alpacaData.positions.length})</h3><button onClick={alpacaCloseAll} style={{background:'#ef444420',color:'#ef4444',border:'1px solid #ef4444',padding:'6px 16px',borderRadius:6,cursor:'pointer',fontWeight:600,fontSize:12}}>Close All</button></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))',gap:12}}>{alpacaData.positions.map((p,i)=>{const lp=getLivePrice(p.symbol);const cp=lp?lp.price:p.current_price;const pnl=p.pnl;const pnlPct=p.pnl_pct;return(<div key={i} style={{background:'#1e293b',borderRadius:12,padding:16,border:pnl>=0?'1px solid #22c55e30':'1px solid #ef444430'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><div style={{display:'flex',alignItems:'center',gap:8}}><span style={{fontSize:20,fontWeight:700,cursor:'pointer'}} onClick={()=>{const a=assets.find(x=>x.ticker===p.symbol);if(a)setSelectedStock(a);}}>{p.symbol}</span>{lp&&<span style={{background:'#22c55e20',color:'#22c55e',padding:'1px 6px',borderRadius:8,fontSize:8,fontWeight:700}}>LIVE</span>}</div><button onClick={()=>alpacaClose(p.symbol)} style={{background:'#ef444420',color:'#ef4444',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Sell</button></div><div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:8}}><div><p style={{fontSize:24,fontWeight:700,margin:0}}>${cp}</p><p style={{color:'#94a3b8',fontSize:11,margin:'2px 0 0'}}>{p.qty} shares @ ${p.entry_price} = ${(p.qty * p.entry_price).toLocaleString()}</p></div><div style={{textAlign:'right'}}><p style={{color:pnl>=0?'#22c55e':'#ef4444',fontSize:20,fontWeight:700,margin:0}}>{pnl>=0?'+':''}${pnl?.toFixed(2)}</p><span style={{background:pnlPct>=0?'#22c55e20':'#ef444420',color:pnlPct>=0?'#22c55e':'#ef4444',padding:'2px 10px',borderRadius:12,fontSize:12,fontWeight:700}}>{pnlPct>=0?'+':''}{pnlPct?.toFixed(2)}%</span></div></div><div style={{background:'#334155',borderRadius:4,height:4,overflow:'hidden'}}><div style={{width:Math.min(Math.abs(pnlPct||0)*10,100)+'%',height:'100%',borderRadius:4,background:pnl>=0?'#22c55e':'#ef4444'}}/></div></div>);})}</div></div>)}
+        {/* Agent Cards */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))',gap:16,marginBottom:20}}>
+          {Object.entries(AGENT_INFO).map(([name, info]) => {
+            const agentData = agents[name] || {};
+            const params = agentData.params || {};
+            const recentCount = agentData.recent_decisions?.length || 0;
+            const isSelected = selectedAgent === name;
 
-            {/* Orders */}
-            {alpacaData.orders&&alpacaData.orders.length>0&&(<div style={{marginBottom:24}}><h3 style={{fontSize:16,fontWeight:600,marginBottom:12}}>Order History</h3><div style={{background:'#1e293b',borderRadius:12,overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'1px solid #334155'}}>{['Symbol','Side','Qty','Type','Price','Status','Time'].map(h=><th key={h} style={{padding:'10px 12px',textAlign:'left',color:'#64748b',fontSize:11,fontWeight:600}}>{h}</th>)}</tr></thead><tbody>{alpacaData.orders.map((o,i)=><tr key={i} style={{borderBottom:'1px solid #1e293b',background:i%2===0?'#1e293b':'#162032'}}><td style={{padding:'10px 12px',fontWeight:700}}>{o.symbol}</td><td style={{padding:'10px 12px',color:o.side==='buy'?'#22c55e':'#ef4444',fontWeight:600}}>{o.side?.toUpperCase()}</td><td style={{padding:'10px 12px'}}>{o.qty}</td><td style={{padding:'10px 12px',fontSize:11}}>{o.type}</td><td style={{padding:'10px 12px'}}>{o.filled_avg_price?'$'+o.filled_avg_price:'-'}</td><td style={{padding:'10px 12px'}}><span style={{background:o.status==='filled'?'#22c55e20':o.status==='canceled'?'#ef444420':'#eab30820',color:o.status==='filled'?'#22c55e':o.status==='canceled'?'#ef4444':'#eab308',padding:'2px 8px',borderRadius:12,fontSize:10,fontWeight:600}}>{o.status}</span></td><td style={{padding:'10px 12px',fontSize:10,color:'#94a3b8'}}>{o.created_at?.slice(0,16)}</td></tr>)}</tbody></table></div></div>)}
+            return (
+              <div key={name} onClick={() => { setSelectedAgent(isSelected ? null : name); if (!isSelected) fetchAgentDecisions(name); }}
+                style={{background:'#0f172a',borderRadius:12,padding:16,border:`2px solid ${isSelected?info.color:'#1e293b'}`,cursor:'pointer',transition:'all 0.2s'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                  <div>
+                    <span style={{fontSize:18,marginRight:6}}>{info.emoji}</span>
+                    <span style={{color:'white',fontWeight:700,fontSize:14}}>{info.name}</span>
+                  </div>
+                  <span style={{color:'#64748b',fontSize:11}}>{recentCount} decisions</span>
+                </div>
+                <div style={{color:'#64748b',fontSize:11,marginBottom:10}}>{info.desc}</div>
 
-            {/* Controls */}
-            <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}><button onClick={()=>{fetchAlpaca();fetchEquityHistory();}} style={{background:'#3b82f6',color:'white',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700}}>Refresh</button><button onClick={runTrader} disabled={traderLoading} style={{background:'#f59e0b',color:'#0f172a',border:'none',padding:'12px 24px',borderRadius:8,cursor:'pointer',fontWeight:700,opacity:traderLoading?0.5:1}}>{traderLoading?'Running...':'Run AI Agent'}</button><span style={{color:'#64748b',fontSize:12}}>Agent runs automatically every 2 hours</span></div>
-          </>)}
-        </>)}
-      </main>
-      <footer style={{textAlign:'center',padding:24,color:'#475569',fontSize:12,borderTop:'1px solid #1e293b'}}>SwingLab v2.0</footer>
+                {/* Agent-specific key metrics */}
+                {name === 'macro_analyst' && params.w_spy_trend && (
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    {[{l:'SPY',v:params.w_spy_trend},{l:'Breadth',v:params.w_breadth},{l:'VIX',v:params.w_vix}].map(w =>
+                      <span key={w.l} style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#94a3b8'}}>{w.l}: {((w.v||0)*100).toFixed(0)}%</span>
+                    )}
+                  </div>
+                )}
+                {name === 'alpha_strategist' && (
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    <span style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#94a3b8'}}>Min Conf: {params.min_confluence||35}</span>
+                    <span style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#94a3b8'}}>Max RSI: {params.max_rsi_entry||68}</span>
+                    {(params.best_setups||[]).slice(0,2).map(s =>
+                      <span key={s} style={{background:'#22c55e15',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#22c55e'}}>{s}</span>
+                    )}
+                  </div>
+                )}
+                {name === 'risk_manager' && (
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    <span style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#94a3b8'}}>Risk: {params.risk_pct_per_trade||2}%</span>
+                    <span style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#94a3b8'}}>R/R≥{params.min_risk_reward||1.5}</span>
+                    <span style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#94a3b8'}}>Max: {params.max_positions||5} pos</span>
+                  </div>
+                )}
+                {name === 'executor' && (
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    <span style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:'#94a3b8'}}>Buffer: {params.limit_price_buffer_pct||0.5}%</span>
+                    <span style={{background:'#1e293b',padding:'2px 6px',borderRadius:4,fontSize:10,color:params.send_telegram?'#22c55e':'#ef4444'}}>{params.send_telegram!==false?'📱 TG On':'📱 TG Off'}</span>
+                  </div>
+                )}
+
+                {/* Performance sparkline */}
+                {agentData.performance?.length > 0 && (
+                  <div style={{marginTop:8}}>
+                    <ResponsiveContainer width="100%" height={40}>
+                      <AreaChart data={agentData.performance.slice().reverse()}>
+                        <Area type="monotone" dataKey={name==='risk_manager'?'metrics.profit_factor':name==='executor'?'metrics.fill_rate':'metrics.accuracy'}
+                          stroke={info.color} fill={info.color} fillOpacity={0.15} strokeWidth={1.5} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Selected Agent — Decision Log */}
+        {selectedAgent && (
+          <div style={{background:'#0f172a',borderRadius:12,padding:16,border:`1px solid ${AGENT_INFO[selectedAgent]?.color || '#334155'}`}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <h3 style={{margin:0,fontSize:15}}>
+                {AGENT_INFO[selectedAgent]?.emoji} {AGENT_INFO[selectedAgent]?.name} — Recent Decisions
+              </h3>
+              <button onClick={() => setSelectedAgent(null)} style={{background:'none',border:'none',color:'#64748b',cursor:'pointer',fontSize:16}}>✕</button>
+            </div>
+            {agentDecisions.length === 0 ? (
+              <div style={{color:'#64748b',textAlign:'center',padding:20}}>No decisions yet</div>
+            ) : (
+              <div style={{maxHeight:400,overflow:'auto'}}>
+                {agentDecisions.map((d, i) => (
+                  <div key={d._id || i} style={{background:'#1e293b',borderRadius:8,padding:10,marginBottom:8,fontSize:12}}>
+                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                      <span style={{color:AGENT_INFO[selectedAgent]?.color,fontWeight:600}}>{d.type}</span>
+                      <span style={{color:'#64748b'}}>{d.created_at ? new Date(d.created_at).toLocaleString() : ''}</span>
+                    </div>
+                    <div style={{color:'#94a3b8',marginBottom:4}}>{d.reasoning}</div>
+                    <div style={{display:'flex',gap:8}}>
+                      <span style={{color:'#64748b'}}>Confidence: {d.confidence?.toFixed(0)||0}%</span>
+                      {d.outcome !== null && d.outcome !== undefined && (
+                        <span style={{color:d.outcome?.correct ? '#22c55e' : '#ef4444'}}>
+                          {d.outcome?.correct ? '✅ Correct' : '❌ Wrong'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Last Actions */}
+        {ps?.actions?.length > 0 && (
+          <div style={{background:'#0f172a',borderRadius:12,padding:16,marginTop:20,border:'1px solid #1e293b'}}>
+            <h3 style={{margin:'0 0 12px',fontSize:15}}>📋 Last Pipeline Actions</h3>
+            {ps.actions.map((a, i) => (
+              <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#1e293b',borderRadius:6,padding:8,marginBottom:6,fontSize:12}}>
+                <span style={{color:a.action==='BUY'?'#22c55e':'#ef4444',fontWeight:700}}>{a.action} {a.ticker}</span>
+                <span style={{color:'#94a3b8'}}>
+                  {a.shares && `${a.shares} shares`} {a.reason||''} {a.pnl_pct ? `(${a.pnl_pct>0?'+':''}${a.pnl_pct}%)` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ============================================
+  // MAIN RENDER
+  // ============================================
+  const navItems = [
+    {id:'dashboard',label:'📊 Dashboard'}, {id:'sectors',label:'🏛️ Sectors'}, {id:'stocks',label:'📈 Stocks'},
+    {id:'agents',label:'🤖 Agents'}, {id:'alpaca',label:'💰 Alpaca'},
+  ];
+
+  return (
+    <div style={{background:'#0a0e17',minHeight:'100vh',color:'white',fontFamily:'-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif'}}>
+      {/* NAV */}
+      <div style={{background:'#0f172a',borderBottom:'1px solid #1e293b',padding:'10px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <span style={{fontSize:20,fontWeight:800}}>SwingLab</span>
+          <span style={{fontSize:10,color:'#64748b',background:'#1e293b',padding:'2px 8px',borderRadius:4}}>v0.3</span>
+          {traderData?.market?.regime && (
+            <span style={{fontSize:11,padding:'2px 8px',borderRadius:6,fontWeight:600,
+              background:getRegimeColor(traderData.market.regime)+'20',
+              color:getRegimeColor(traderData.market.regime)}}>
+              {getRegimeEmoji(traderData.market.regime)} {traderData.market.regime}
+              {traderData.market.confidence && ` ${traderData.market.confidence}%`}
+            </span>
+          )}
+        </div>
+        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+          {navItems.map(n => (
+            <button key={n.id} onClick={() => { setView(n.id); setSelectedStock(null); setSelectedSector(null); }}
+              style={{padding:'6px 12px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,
+                background:view===n.id?'#3b82f6':'transparent',color:view===n.id?'white':'#94a3b8'}}>
+              {n.label}
+            </button>
+          ))}
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSearch()}
+            placeholder="Search ticker..." style={{padding:'6px 10px',borderRadius:6,border:'1px solid #334155',background:'#1e293b',color:'white',fontSize:12,width:120}} />
+          <button onClick={handleSearch} disabled={searching}
+            style={{padding:'6px 10px',borderRadius:6,background:'#3b82f6',color:'white',border:'none',cursor:'pointer',fontSize:12}}>
+            {searching?'...':'🔍'}
+          </button>
+        </div>
+      </div>
+
+      {/* CONTENT */}
+      <div style={{maxWidth:1400,margin:'0 auto',padding:20}}>
+        {loading && view !== 'agents' ? <div style={{textAlign:'center',padding:40,color:'#64748b'}}>Loading...</div> :
+
+        /* ==================== DASHBOARD ==================== */
+        view === 'dashboard' ? (
+          <div>
+            {/* Market Overview */}
+            {Object.keys(marketData).length > 0 && (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(100px, 1fr))',gap:8,marginBottom:20}}>
+                {Object.entries(marketData).map(([sym, data]) => (
+                  <div key={sym} style={{background:'#0f172a',borderRadius:8,padding:10,textAlign:'center',border:'1px solid #1e293b'}}>
+                    <div style={{fontSize:11,color:'#64748b'}}>{sym}</div>
+                    <div style={{fontSize:14,fontWeight:700,color:'white'}}>${data.price?.toLocaleString()}</div>
+                    <div style={{fontSize:11,color:data.change_pct>=0?'#22c55e':'#ef4444'}}>{data.change_pct>=0?'+':''}{data.change_pct?.toFixed(2)}%</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Top Setups */}
+            <h3>🔥 Top Setups</h3>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:12}}>
+              {topSetups.map(a => { const live=getLivePrice(a.ticker); return (
+                <div key={a.ticker} onClick={()=>setSelectedStock(a)} style={{background:'#0f172a',borderRadius:10,padding:14,cursor:'pointer',border:'1px solid #1e293b',transition:'border 0.2s'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                    <div><span style={{fontWeight:700,fontSize:15}}>{a.ticker}</span> <span style={{color:'#64748b',fontSize:11}}>{a.sector_code}</span></div>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontWeight:600}}>${live?.price || a.price}</div>
+                      <div style={{fontSize:11,color:(live?.change_pct||a.change_pct)>=0?'#22c55e':'#ef4444'}}>{(live?.change_pct||a.change_pct)>=0?'+':''}{(live?.change_pct||a.change_pct)?.toFixed(2)}%</div>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                      <span style={{color:getScoreColor(a.setup_score),fontWeight:700,fontSize:16}}>{a.setup_score}</span>
+                      {getSetupBadge(a.setup_type)}
+                    </div>
+                    <span style={{color:'#64748b',fontSize:11}}>RSI {a.rsi?.toFixed(0)}</span>
+                  </div>
+                </div>
+              );})}
+            </div>
+          </div>
+        ) :
+
+        /* ==================== SECTORS ==================== */
+        view === 'sectors' ? (
+          <div>
+            <h3>🏛️ Sectors</h3>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
+              {sectors.sort((a,b)=>b.composite_score-a.composite_score).map(s => (
+                <div key={s.code} onClick={()=>{setSelectedSector(s.code);setView('stocks');}}
+                  style={{background:'#0f172a',borderRadius:10,padding:14,cursor:'pointer',border:'1px solid #1e293b'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                    <span style={{fontWeight:700}}>{s.code}</span>
+                    <span style={{color:getScoreColor(s.composite_score),fontWeight:700}}>{s.composite_score?.toFixed(1)}</span>
+                  </div>
+                  <div style={{color:'#64748b',fontSize:12}}>{s.name}</div>
+                  <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>
+                    ${s.price} | RSI {s.rsi} | Str {s.strength_score>=0?'+':''}{s.strength_score?.toFixed(1)}
+                  </div>
+                  {s.history && (
+                    <ResponsiveContainer width="100%" height={40}>
+                      <AreaChart data={s.history.slice(-30)}>
+                        <Area type="monotone" dataKey="close" stroke={s.composite_score>=50?'#22c55e':'#ef4444'} fill={s.composite_score>=50?'#22c55e':'#ef4444'} fillOpacity={0.1} strokeWidth={1.5} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) :
+
+        /* ==================== STOCKS ==================== */
+        view === 'stocks' ? (
+          <div>
+            {selectedSector && <div style={{marginBottom:12}}><button onClick={()=>setSelectedSector(null)} style={{background:'#1e293b',color:'white',border:'none',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:12}}>← All Stocks</button> <span style={{color:'#64748b',marginLeft:8}}>{selectedSector}</span></div>}
+            {selectedStock ? (
+              <div>
+                <button onClick={()=>setSelectedStock(null)} style={{background:'#1e293b',color:'white',border:'none',borderRadius:6,padding:'6px 12px',cursor:'pointer',marginBottom:16,fontSize:12}}>← Back</button>
+                <div style={{background:'#0f172a',borderRadius:12,padding:20,border:'1px solid #1e293b'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+                    <div>
+                      <h2 style={{margin:0}}>{selectedStock.ticker}</h2>
+                      <span style={{color:'#64748b'}}>{selectedStock.sector_code}</span>
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontSize:24,fontWeight:700}}>${selectedStock.price}</div>
+                      <div style={{color:selectedStock.change_pct>=0?'#22c55e':'#ef4444'}}>{selectedStock.change_pct>=0?'+':''}{selectedStock.change_pct}%</div>
+                    </div>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:16}}>
+                    {[{l:'Score',v:selectedStock.setup_score,c:getScoreColor(selectedStock.setup_score)},{l:'RSI',v:selectedStock.rsi?.toFixed(1)},{l:'POC',v:selectedStock.poc_price?'$'+selectedStock.poc_price.toFixed(2):'N/A'},{l:'VA High',v:selectedStock.value_area_high?'$'+selectedStock.value_area_high.toFixed(2):'N/A'},{l:'VA Low',v:selectedStock.value_area_low?'$'+selectedStock.value_area_low.toFixed(2):'N/A'},{l:'Rel Vol',v:selectedStock.relative_volume?.toFixed(1)+'x'}].map(m =>
+                      <div key={m.l} style={{background:'#1e293b',borderRadius:6,padding:8,textAlign:'center'}}>
+                        <div style={{fontSize:10,color:'#64748b'}}>{m.l}</div>
+                        <div style={{fontWeight:700,color:m.c||'white',marginTop:2}}>{m.v}</div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Confluence */}
+                  {(() => { const alert=getSmartAlert(selectedStock); return (
+                    <div style={{background:'#1e293b',borderRadius:8,padding:12,marginBottom:16}}>
+                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+                        <span style={{fontWeight:600}}>Confluence</span>
+                        <span style={{fontWeight:700,color:alert.confluence>=6?'#22c55e':alert.confluence>=4?'#eab308':'#ef4444'}}>{alert.confluence}/10</span>
+                      </div>
+                      <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                        {alert.factors.map(f => <span key={f.name} style={{background:f.pass?'#22c55e15':'#ef444415',color:f.pass?'#22c55e':'#ef4444',padding:'2px 6px',borderRadius:4,fontSize:10}}>{f.name}: {f.detail}</span>)}
+                      </div>
+                    </div>
+                  );})()}
+                  {/* Price chart */}
+                  {selectedStock.price_history && (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={selectedStock.price_history}>
+                        <XAxis dataKey="date" tick={{fontSize:10,fill:'#64748b'}} interval="preserveStartEnd" />
+                        <YAxis domain={['auto','auto']} tick={{fontSize:10,fill:'#64748b'}} />
+                        <Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8}} />
+                        <Area type="monotone" dataKey="close" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
+                        {selectedStock.poc_price && <ReferenceLine y={selectedStock.poc_price} stroke="#eab308" strokeDasharray="4 4" label={{value:'POC',fill:'#eab308',fontSize:10}} />}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:12}}>
+                {filteredAssets.sort((a,b)=>b.setup_score-a.setup_score).map(a => { const live=getLivePrice(a.ticker); return (
+                  <div key={a.ticker} onClick={()=>setSelectedStock(a)} style={{background:'#0f172a',borderRadius:10,padding:12,cursor:'pointer',border:'1px solid #1e293b'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                      <div><span style={{fontWeight:700}}>{a.ticker}</span> <span style={{color:'#64748b',fontSize:11}}>{a.sector_code}</span></div>
+                      <div style={{textAlign:'right'}}>
+                        <span style={{fontWeight:600}}>${live?.price||a.price}</span>
+                        <span style={{fontSize:11,marginLeft:6,color:(live?.change_pct||a.change_pct)>=0?'#22c55e':'#ef4444'}}>{(live?.change_pct||a.change_pct)>=0?'+':''}{(live?.change_pct||a.change_pct)?.toFixed(2)}%</span>
+                      </div>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                        <span style={{color:getScoreColor(a.setup_score),fontWeight:700}}>{a.setup_score}</span>
+                        {getSetupBadge(a.setup_type)}
+                      </div>
+                      <span style={{color:'#64748b',fontSize:11}}>RSI {a.rsi?.toFixed(0)} | {a.relative_volume?.toFixed(1)}x</span>
+                    </div>
+                  </div>
+                );})}
+              </div>
+            )}
+          </div>
+        ) :
+
+        /* ==================== AGENTS ==================== */
+        view === 'agents' ? (
+          agentsLoading && !agentsStatus ? <div style={{textAlign:'center',padding:40,color:'#64748b'}}>Loading agents...</div> : renderAgentsView()
+        ) :
+
+        /* ==================== ALPACA ==================== */
+        view === 'alpaca' ? (
+          <div>
+            {alpacaData ? (
+              <div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:20}}>
+                  {[{l:'Equity',v:`$${alpacaData.equity?.toLocaleString()}`},{l:'Cash',v:`$${alpacaData.cash?.toLocaleString()}`},{l:'Buying Power',v:`$${alpacaData.buying_power?.toLocaleString()}`},{l:'Daily P&L',v:`${alpacaData.daily_pnl>=0?'+':''}$${alpacaData.daily_pnl?.toFixed(2)}`,c:alpacaData.daily_pnl>=0?'#22c55e':'#ef4444'},{l:'Daily %',v:`${alpacaData.daily_pnl_pct>=0?'+':''}${alpacaData.daily_pnl_pct?.toFixed(2)}%`,c:alpacaData.daily_pnl_pct>=0?'#22c55e':'#ef4444'}].map(m =>
+                    <div key={m.l} style={{background:'#0f172a',borderRadius:10,padding:14,textAlign:'center',border:'1px solid #1e293b'}}>
+                      <div style={{fontSize:11,color:'#64748b'}}>{m.l}</div>
+                      <div style={{fontSize:18,fontWeight:700,color:m.c||'white',marginTop:4}}>{m.v}</div>
+                    </div>
+                  )}
+                </div>
+                {/* Equity chart */}
+                {Object.keys(equityPeriods).length > 0 && (
+                  <div style={{background:'#0f172a',borderRadius:12,padding:16,marginBottom:20,border:'1px solid #1e293b'}}>
+                    <div style={{display:'flex',gap:6,marginBottom:12}}>
+                      {Object.keys(equityPeriods).map(p => <button key={p} onClick={()=>setSelectedPeriod(p)} style={{padding:'4px 10px',borderRadius:6,border:'none',cursor:'pointer',fontSize:11,fontWeight:600,background:selectedPeriod===p?'#3b82f6':'#1e293b',color:selectedPeriod===p?'white':'#64748b'}}>{p}</button>)}
+                    </div>
+                    {equityPeriods[selectedPeriod] && (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={equityPeriods[selectedPeriod]}>
+                          <XAxis dataKey="date" tick={{fontSize:10,fill:'#64748b'}} interval="preserveStartEnd" />
+                          <YAxis tick={{fontSize:10,fill:'#64748b'}} />
+                          <Tooltip contentStyle={{background:'#1e293b',border:'1px solid #334155',borderRadius:8}} />
+                          <Area type="monotone" dataKey="equity" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                )}
+                {/* Positions */}
+                {alpacaData.positions?.length > 0 && (
+                  <div style={{marginBottom:20}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                      <h3 style={{margin:0}}>Positions ({alpacaData.positions.length})</h3>
+                      <button onClick={alpacaCloseAll} style={{padding:'4px 10px',borderRadius:6,background:'#ef4444',color:'white',border:'none',cursor:'pointer',fontSize:11}}>Close All</button>
+                    </div>
+                    {alpacaData.positions.map(p => (
+                      <div key={p.symbol} style={{background:'#0f172a',borderRadius:8,padding:12,marginBottom:8,border:'1px solid #1e293b',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                        <div>
+                          <span style={{fontWeight:700,marginRight:8}}>{p.symbol}</span>
+                          <span style={{color:'#64748b',fontSize:12}}>{p.qty} shares @ ${p.entry_price}</span>
+                        </div>
+                        <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                          <div style={{textAlign:'right'}}>
+                            <div style={{fontWeight:600}}>${p.current_price}</div>
+                            <div style={{fontSize:12,color:p.pnl_pct>=0?'#22c55e':'#ef4444'}}>{p.pnl_pct>=0?'+':''}{p.pnl_pct?.toFixed(2)}% (${p.pnl?.toFixed(2)})</div>
+                          </div>
+                          <button onClick={(e)=>{e.stopPropagation();alpacaClose(p.symbol);}} style={{padding:'4px 8px',borderRadius:4,background:'#ef4444',color:'white',border:'none',cursor:'pointer',fontSize:11}}>Close</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Recent orders */}
+                {alpacaData.orders?.length > 0 && (
+                  <div>
+                    <h3>Recent Orders</h3>
+                    {alpacaData.orders.slice(0,10).map(o => (
+                      <div key={o.id} style={{background:'#0f172a',borderRadius:6,padding:8,marginBottom:6,border:'1px solid #1e293b',fontSize:12,display:'flex',justifyContent:'space-between'}}>
+                        <span><span style={{color:o.side==='buy'?'#22c55e':'#ef4444',fontWeight:600}}>{o.side?.toUpperCase()}</span> {o.symbol} x{o.qty}</span>
+                        <span style={{color:'#64748b'}}>{o.status} | {o.type}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : <div style={{textAlign:'center',padding:40,color:'#64748b'}}>Connecting to Alpaca...</div>}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
