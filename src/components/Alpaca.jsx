@@ -202,7 +202,7 @@ export default function Alpaca({
           }}
         >
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            {Object.keys(equityPeriods).map((p) => (
+            {['1D','1W','1M','3M','6M','1Y','YTD'].filter(p => equityPeriods[p]).map((p) => (
               <button
                 key={p}
                 onClick={() => setSelectedPeriod(p)}
