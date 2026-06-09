@@ -229,7 +229,7 @@ export default function Alpaca({
                   tick={{ fontSize: 10, fill: '#64748b' }}
                   interval="preserveStartEnd"
                 />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748b' }} />
                 <Tooltip
                   contentStyle={{
                     background: '#1e293b',
