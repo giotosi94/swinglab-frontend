@@ -228,7 +228,7 @@ export default function Dashboard({
                 <div style={{ fontSize: 10, color: '#475569', marginBottom: 6 }}>
                   Last Run:{' '}
                   {ps?.last_run
-                    ? new Date(ps.last_run).toLocaleString()
+                    ? new Date(ps.last_run + (ps.last_run.endsWith('Z') ? '' : 'Z')).toLocaleString()
                     : 'Never'}
                 </div>
                 {lastActions.slice(0, 3).map((a, i) => (
