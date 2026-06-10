@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { getScoreColor, getSmartAlert } from '../utils/helpers';
 
-export default function StockDetail({ stock, onBack, onBuy }) {
+export default function StockDetail({ stock, onBack, onBuy, livePrice }) {
   const alert = getSmartAlert(stock);
   const [buyQty, setBuyQty] = useState(1);
   const [buyLoading, setBuyLoading] = useState(false);
@@ -115,14 +115,14 @@ export default function StockDetail({ stock, onBack, onBuy }) {
             <span style={{ color: '#64748b' }}>{stock.sector_code}</span>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>${stock.price}</div>
+            <div style={{ fontSize: 24, fontWeight: 700 }}>${livePrice?.price || stock.price}</div>
             <div
               style={{
                 color: stock.change_pct >= 0 ? '#22c55e' : '#ef4444',
               }}
             >
-              {stock.change_pct >= 0 ? '+' : ''}
-              {stock.change_pct}%
+              {(livePrice?.change_pct ?? stock.change_pct) >= 0 ? '+' : ''}
+              {(livePrice?.change_pct ?? stock.change_pct)?.toFixed(2)}%
             </div>
           </div>
           {/* Quick Buy */}
