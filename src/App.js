@@ -30,6 +30,7 @@ function App() {
   const [equityPeriods, setEquityPeriods] = useState({});
   const [marketData, setMarketData] = useState({});
   const [selectedPeriod, setSelectedPeriod] = useState('1M');
+  const [mlPredictions, setMlPredictions] = useState({});
   // Agents
   const [agentsStatus, setAgentsStatus] = useState(null);
   const [agentsLoading, setAgentsLoading] = useState(false);
@@ -175,6 +176,18 @@ function App() {
     }
   };
 
+  const fetchMlPredictions = async () => {
+    try {
+      const r = await fetch(`${API}/api/ml/predict/all`);
+      const d = await r.json();
+      if (d && d.top_20) {
+        const map = {};
+        d.top_20.forEach(p => { map[p.ticker] = p; });
+        setMlPredictions(map);
+      }
+    } catch (e) {}
+  };
+
   // Agents
   const fetchAgentsStatus = async () => {
     setAgentsLoading(true);
@@ -253,6 +266,7 @@ function App() {
     fetchMarket();
     fetchSettings();
     fetchAgentsStatus();
+    fetchMlPredictions();
     const p = setInterval(fetchLivePrices, 15000);
     const a = setInterval(fetchAlpaca, 60000);
     const d = setInterval(fetchData, 300000);
@@ -321,6 +335,7 @@ function App() {
               loadFullStock(ticker);
               setView('stocks');
             }}
+            mlPredictions={mlPredictions}
           />
         ) : view === 'sectors' ? (
           <Sectors
@@ -336,8 +351,9 @@ function App() {
             selectedStock={selectedStock}
             setSelectedStock={setSelectedStock}
             livePrices={livePrices}
-            onBuy={alpacaBuy}
+           onBuy={alpacaBuy}
             onLoadFullStock={loadFullStock}
+            mlPredictions={mlPredictions}
           />
         ) : view === 'agents' ? (
           <Agents
