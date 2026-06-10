@@ -9,6 +9,7 @@ import Agents from './components/Agents';
 import Alpaca from './components/Alpaca';
 import Settings from './components/Settings';
 import Guide from './components/Guide';
+import Trades from './components/Trades';
 
 const API = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
 
@@ -364,6 +365,8 @@ function App() {
             assets={assets}
             settings={settings}
           />
+        ) : view === 'trades' ? (
+          <Trades />
         ) : view === 'settings' ? (
           <Settings
             settings={settings}
