@@ -12,6 +12,7 @@ export default function Dashboard({
   onGoToAlpaca,
   onGoToAgents,
   onGoToSector,
+  onLoadFullStock,
 }) {
   const getLivePrice = (t) => livePrices[t] || null;
   const topSetups = [...assets]
@@ -390,7 +391,7 @@ export default function Dashboard({
           return (
             <div
               key={a.ticker}
-              onClick={() => setSelectedStock(a)}
+              onClick={() => onLoadFullStock(a.ticker)}
               style={{
                 background: '#0f172a',
                 borderRadius: 10,
