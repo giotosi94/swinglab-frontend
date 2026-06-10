@@ -160,6 +160,19 @@ function App() {
     } catch (e) {}
     setLoading(false);
   };
+  
+  // Load full stock data (with price_history, charts, etc.)
+  const loadFullStock = async (ticker) => {
+    try {
+      const r = await fetch(`${API}/api/data/search/${ticker}`);
+      const d = await r.json();
+      if (d && !d.error) {
+        setSelectedStock(d);
+      }
+    } catch (e) {
+      console.error('Load stock failed', e);
+    }
+  };
 
   // Agents
   const fetchAgentsStatus = async () => {
