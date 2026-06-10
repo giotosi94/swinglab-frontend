@@ -318,7 +318,7 @@ function App() {
             selectedStock={selectedStock}
             setSelectedStock={setSelectedStock}
             livePrices={livePrices}
-            onBuy={handleAlpacaBuy
+            onBuy={alpacaBuy}
           />
         ) : view === 'agents' ? (
           <Agents
