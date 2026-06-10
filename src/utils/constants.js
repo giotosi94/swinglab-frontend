@@ -34,7 +34,7 @@ export const NAV_ITEMS = [
   { id: 'stocks',    label: '📈 Stocks' },
   { id: 'agents',    label: '🤖 Agents' },
   { id: 'alpaca',    label: '💰 Alpaca' },
-  { id: 'trades',    label: '📋 Trades' }
+  { id: 'trades',    label: '📋 Trades' },
   { id: 'settings',  label: '⚙️ Settings' },
   { id: 'guide',     label: '📖 Guide' },
 ];
