@@ -13,6 +13,7 @@ export default function Dashboard({
   onGoToAgents,
   onGoToSector,
   onLoadFullStock,
+  mlPredictions,
 }) {
   const getLivePrice = (t) => livePrices[t] || null;
   const topSetups = [...assets]
@@ -456,6 +457,15 @@ export default function Dashboard({
                 <span style={{ color: '#64748b', fontSize: 11 }}>
                   RSI {a.rsi?.toFixed(0)}
                 </span>
+                {mlPredictions[a.ticker] && (
+                  <span style={{
+                    background: mlPredictions[a.ticker].prediction === 'WIN' ? '#22c55e20' : '#ef444420',
+                    color: mlPredictions[a.ticker].prediction === 'WIN' ? '#22c55e' : '#ef4444',
+                    padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, marginLeft: 6,
+                  }}>
+                    🧠 {mlPredictions[a.ticker].ml_score}%
+                  </span>
+                )}
               </div>
             </div>
           );
