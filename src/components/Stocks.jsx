@@ -4,7 +4,7 @@ import StockDetail from './StockDetail';
 
 export default function Stocks({
   assets, selectedSector, setSelectedSector,
-  selectedStock, setSelectedStock, livePrices, onBuy,
+  selectedStock, setSelectedStock, livePrices, onBuy, onLoadFullStock,
 }) {
   const getLivePrice = (t) => livePrices[t] || null;
   const filteredAssets = selectedSector
@@ -51,7 +51,7 @@ export default function Stocks({
             return (
               <div
                 key={a.ticker}
-                onClick={() => setSelectedStock(a)}
+                onClick={() => onLoadFullStock(a.ticker)}
                 style={{
                   background: '#0f172a',
                   borderRadius: 10,
