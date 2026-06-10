@@ -316,6 +316,10 @@ function App() {
               setSelectedSector(code);
               setView('stocks');
             }}
+          onLoadFullStock={(ticker) => {
+              loadFullStock(ticker);
+              setView('stocks');
+            }}
           />
         ) : view === 'sectors' ? (
           <Sectors
@@ -332,6 +336,7 @@ function App() {
             setSelectedStock={setSelectedStock}
             livePrices={livePrices}
             onBuy={alpacaBuy}
+            onLoadFullStock={loadFullStock}
           />
         ) : view === 'agents' ? (
           <Agents
