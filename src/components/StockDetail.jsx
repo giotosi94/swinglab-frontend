@@ -1,12 +1,77 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, ReferenceLine,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  Cell,
 } from 'recharts';
 import { getScoreColor, getSmartAlert } from '../utils/helpers';
 
-export default function StockDetail({ stock, onBack }) {
+export default function StockDetail({ stock, onBack, onBuy }) {
   const alert = getSmartAlert(stock);
+  const [buyQty, setBuyQty] = useState(1);
+  const [buyLoading, setBuyLoading] = useState(false);
+
+  const history = stock.price_history || [];
+
+  // Prepare MACD data from history (approximate from EMAs if not in data)
+  const chartData = history.map((d) => ({
+    ...d,
+    macd_hist:
+      d.ema10 && d.ema20
+        ? Math.round((d.ema10 - d.ema20) * 100) / 100
+        : 0,
+  }));
+
+  const wyckoff = stock.wyckoff || {};
+  const accumulation = stock.accumulation || {};
+  const patterns = stock.candlestick_patterns || [];
+
+  const getWyckoffColor = (phase) =>
+    ({
+      accumulation: '#22c55e',
+      markup: '#3b82f6',
+      distribution: '#f97316',
+      markdown: '#ef4444',
+      spring: '#8b5cf6',
+    }[phase] || '#64748b');
+
+  const getWyckoffEmoji = (phase) =>
+    ({
+      accumulation: '🟢',
+      markup: '🚀',
+      distribution: '🟠',
+      markdown: '🔴',
+      spring: '⚡',
+    }[phase] || '⚪');
+
+  const handleBuy = async () => {
+    if (!onBuy || buyQty < 1) return;
+    setBuyLoading(true);
+    try {
+      await onBuy(stock.ticker, buyQty);
+    } catch {}
+    setBuyLoading(false);
+  };
+
+  const metrics = [
+    { l: 'Score', v: stock.setup_score, c: getScoreColor(stock.setup_score) },
+    { l: 'RSI', v: stock.rsi?.toFixed(1) },
+    { l: 'POC', v: stock.poc_price ? '$' + stock.poc_price.toFixed(2) : 'N/A' },
+    { l: 'VA High', v: stock.value_area_high ? '$' + stock.value_area_high.toFixed(2) : 'N/A' },
+    { l: 'VA Low', v: stock.value_area_low ? '$' + stock.value_area_low.toFixed(2) : 'N/A' },
+    { l: 'Rel Vol', v: stock.relative_volume?.toFixed(1) + 'x' },
+    { l: '52w High', v: stock.high_52w ? '$' + stock.high_52w : 'N/A' },
+    { l: '52w Low', v: stock.low_52w ? '$' + stock.low_52w : 'N/A' },
+  ];
 
   return (
     <div>
@@ -34,13 +99,15 @@ export default function StockDetail({ stock, onBack }) {
           border: '1px solid #1e293b',
         }}
       >
-        {/* Header */}
+        {/* ---- Header + Buy Button ---- */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: 16,
+            flexWrap: 'wrap',
+            gap: 12,
           }}
         >
           <div>
@@ -58,25 +125,64 @@ export default function StockDetail({ stock, onBack }) {
               {stock.change_pct}%
             </div>
           </div>
+          {/* Quick Buy */}
+          {onBuy && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                background: '#1e293b',
+                borderRadius: 8,
+                padding: '8px 12px',
+              }}
+            >
+              <input
+                type="number"
+                value={buyQty}
+                min={1}
+                onChange={(e) => setBuyQty(Math.max(1, parseInt(e.target.value) || 1))}
+                style={{
+                  width: 60,
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  border: '1px solid #334155',
+                  background: '#0f172a',
+                  color: 'white',
+                  fontSize: 13,
+                  textAlign: 'center',
+                }}
+              />
+              <button
+                onClick={handleBuy}
+                disabled={buyLoading}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: buyLoading ? '#334155' : '#22c55e',
+                  color: 'white',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: buyLoading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {buyLoading ? '\u23F3' : '\uD83D\uDED2'} BUY {stock.ticker}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Metrics Grid */}
+        {/* ---- Metrics Grid ---- */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-            gap: 10,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+            gap: 8,
             marginBottom: 16,
           }}
         >
-          {[
-            { l: 'Score', v: stock.setup_score, c: getScoreColor(stock.setup_score) },
-            { l: 'RSI', v: stock.rsi?.toFixed(1) },
-            { l: 'POC', v: stock.poc_price ? '$' + stock.poc_price.toFixed(2) : 'N/A' },
-            { l: 'VA High', v: stock.value_area_high ? '$' + stock.value_area_high.toFixed(2) : 'N/A' },
-            { l: 'VA Low', v: stock.value_area_low ? '$' + stock.value_area_low.toFixed(2) : 'N/A' },
-            { l: 'Rel Vol', v: stock.relative_volume?.toFixed(1) + 'x' },
-          ].map((m) => (
+          {metrics.map((m) => (
             <div
               key={m.l}
               style={{
@@ -94,7 +200,166 @@ export default function StockDetail({ stock, onBack }) {
           ))}
         </div>
 
-        {/* Confluence */}
+        {/* ---- Wyckoff + Accumulation + Patterns ---- */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          {/* Wyckoff */}
+          <div
+            style={{
+              background: '#1e293b',
+              borderRadius: 8,
+              padding: 12,
+              borderLeft: `3px solid ${getWyckoffColor(wyckoff.phase)}`,
+            }}
+          >
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>
+              Wyckoff Phase
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>
+                {getWyckoffEmoji(wyckoff.phase)}
+              </span>
+              <div>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    color: getWyckoffColor(wyckoff.phase),
+                    fontSize: 14,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {wyckoff.phase || 'Unknown'}
+                </div>
+                <div style={{ fontSize: 10, color: '#64748b' }}>
+                  {wyckoff.signal || ''} • Conf: {wyckoff.confidence || 0}%
+                </div>
+              </div>
+            </div>
+            {wyckoff.description && (
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>
+                {wyckoff.description}
+              </div>
+            )}
+          </div>
+
+          {/* Accumulation */}
+          <div
+            style={{
+              background: '#1e293b',
+              borderRadius: 8,
+              padding: 12,
+              borderLeft: `3px solid ${
+                accumulation.score >= 70
+                  ? '#22c55e'
+                  : accumulation.score >= 40
+                  ? '#eab308'
+                  : '#64748b'
+              }`,
+            }}
+          >
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>
+              Accumulation
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontSize: 18,
+                  color:
+                    accumulation.score >= 70
+                      ? '#22c55e'
+                      : accumulation.score >= 40
+                      ? '#eab308'
+                      : '#64748b',
+                }}
+              >
+                {accumulation.score || 0}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: '#94a3b8',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {accumulation.level || 'none'}
+              </span>
+            </div>
+            {accumulation.factors && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                {accumulation.factors.map((f) => (
+                  <span
+                    key={f.name}
+                    style={{
+                      background: f.pass ? '#22c55e15' : '#ef444415',
+                      color: f.pass ? '#22c55e' : '#ef4444',
+                      padding: '1px 5px',
+                      borderRadius: 4,
+                      fontSize: 9,
+                    }}
+                  >
+                    {f.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Candlestick Patterns */}
+          <div style={{ background: '#1e293b', borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
+              Candlestick Patterns
+            </div>
+            {patterns.length > 0 ? (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {patterns.map((p, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      background:
+                        p.type === 'bullish'
+                          ? '#22c55e15'
+                          : p.type === 'bearish'
+                          ? '#ef444415'
+                          : '#64748b15',
+                      borderRadius: 6,
+                      padding: '4px 8px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 11,
+                        color:
+                          p.type === 'bullish'
+                            ? '#22c55e'
+                            : p.type === 'bearish'
+                            ? '#ef4444'
+                            : '#94a3b8',
+                      }}
+                    >
+                      {p.type === 'bullish' ? '🟢' : p.type === 'bearish' ? '🔴' : '⚪'}{' '}
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: 9, color: '#64748b' }}>
+                      {p.strength} • {p.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: '#475569', fontSize: 12 }}>No patterns detected</div>
+            )}
+          </div>
+        </div>
+
+        {/* ---- Confluence ---- */}
         <div
           style={{
             background: '#1e293b',
@@ -143,40 +408,216 @@ export default function StockDetail({ stock, onBack }) {
           </div>
         </div>
 
-        {/* Price Chart */}
-        {stock.price_history && (
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={stock.price_history}>
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 10, fill: '#64748b' }}
-                interval="preserveStartEnd"
-              />
-              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748b' }} />
-              <Tooltip
-                contentStyle={{
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: 8,
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="close"
-                stroke="#3b82f6"
-                fill="#3b82f6"
-                fillOpacity={0.1}
-                strokeWidth={2}
-              />
-              {stock.poc_price && (
-                <ReferenceLine
-                  y={stock.poc_price}
-                  stroke="#eab308"
-                  strokeDasharray="4 4"
+        {/* ---- Price Chart with EMA Lines ---- */}
+        {chartData.length > 0 && (
+          <>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
+              {'📈'} Price + EMA (10/20/50)
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={chartData}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  interval="preserveStartEnd"
                 />
-              )}
-            </AreaChart>
-          </ResponsiveContainer>
+                <YAxis
+                  domain={['auto', 'auto']}
+                  tick={{ fontSize: 10, fill: '#64748b' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: 8,
+                    fontSize: 11,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="close"
+                  stroke="white"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Price"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="ema10"
+                  stroke="#3b82f6"
+                  strokeWidth={1}
+                  dot={false}
+                  strokeDasharray="2 2"
+                  name="EMA 10"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="ema20"
+                  stroke="#eab308"
+                  strokeWidth={1}
+                  dot={false}
+                  strokeDasharray="4 4"
+                  name="EMA 20"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="ema50"
+                  stroke="#ef4444"
+                  strokeWidth={1}
+                  dot={false}
+                  strokeDasharray="6 6"
+                  name="EMA 50"
+                />
+                {stock.poc_price && (
+                  <ReferenceLine
+                    y={stock.poc_price}
+                    stroke="#8b5cf6"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: 'POC',
+                      fill: '#8b5cf6',
+                      fontSize: 10,
+                      position: 'right',
+                    }}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+
+            {/* ---- EMA Legend ---- */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 16,
+                justifyContent: 'center',
+                marginTop: 4,
+                marginBottom: 16,
+              }}
+            >
+              {[
+                { c: 'white', l: 'Price', d: '' },
+                { c: '#3b82f6', l: 'EMA 10', d: '· ·' },
+                { c: '#eab308', l: 'EMA 20', d: '- -' },
+                { c: '#ef4444', l: 'EMA 50', d: '— —' },
+                { c: '#8b5cf6', l: 'POC', d: '- -' },
+              ].map((item) => (
+                <span
+                  key={item.l}
+                  style={{ fontSize: 10, color: item.c, fontWeight: 600 }}
+                >
+                  {item.d} {item.l}
+                </span>
+              ))}
+            </div>
+
+            {/* ---- MACD Histogram ---- */}
+            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
+              {'📊'} MACD Histogram (EMA10 - EMA20)
+            </div>
+            <ResponsiveContainer width="100%" height={100}>
+              <BarChart data={chartData}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 9, fill: '#64748b' }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis tick={{ fontSize: 9, fill: '#64748b' }} />
+                <Tooltip
+                  contentStyle={{
+                    background: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: 8,
+                    fontSize: 11,
+                  }}
+                />
+                <ReferenceLine y={0} stroke="#334155" />
+                <Bar dataKey="macd_hist" name="MACD">
+                  {chartData.map((d, i) => (
+                    <Cell
+                      key={i}
+                      fill={d.macd_hist >= 0 ? '#22c55e' : '#ef4444'}
+                      fillOpacity={0.8}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+
+            {/* ---- RSI Chart ---- */}
+            <div
+              style={{
+                fontSize: 12,
+                color: '#94a3b8',
+                marginBottom: 6,
+                marginTop: 12,
+              }}
+            >
+              {'📉'} RSI (14)
+            </div>
+            <ResponsiveContainer width="100%" height={100}>
+              <AreaChart data={chartData}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 9, fill: '#64748b' }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  ticks={[30, 50, 70]}
+                  tick={{ fontSize: 9, fill: '#64748b' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: 8,
+                    fontSize: 11,
+                  }}
+                />
+                <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" />
+                <ReferenceLine y={30} stroke="#22c55e" strokeDasharray="3 3" />
+                <Area
+                  type="monotone"
+                  dataKey="rsi"
+                  stroke="#8b5cf6"
+                  fill="#8b5cf620"
+                  strokeWidth={1.5}
+                  name="RSI"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+
+            {/* ---- Volume ---- */}
+            <div
+              style={{
+                fontSize: 12,
+                color: '#94a3b8',
+                marginBottom: 6,
+                marginTop: 12,
+              }}
+            >
+              {'📦'} Volume
+            </div>
+            <ResponsiveContainer width="100%" height={80}>
+              <BarChart data={chartData}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 9, fill: '#64748b' }}
+                  interval="preserveStartEnd"
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: 8,
+                    fontSize: 11,
+                  }}
+                  formatter={(v) => [v?.toLocaleString(), 'Volume']}
+                />
+                <Bar dataKey="volume" fill="#3b82f6" fillOpacity={0.4} name="Volume" />
+              </BarChart>
+            </ResponsiveContainer>
+          </>
         )}
       </div>
     </div>
