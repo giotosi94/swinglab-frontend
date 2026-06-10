@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { getScoreColor, getSmartAlert } from '../utils/helpers';
 
-export default function StockDetail({ stock, onBack, onBuy, livePrice }) {
+export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore }) {
   const alert = getSmartAlert(stock);
   const [buyQty, setBuyQty] = useState(1);
   const [buyLoading, setBuyLoading] = useState(false);
@@ -408,6 +408,32 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice }) {
           </div>
         </div>
 
+        {/* ---- ML Prediction ---- */}
+        {mlScore && mlScore.ml_score !== null && (
+          <div style={{
+            background: '#1e293b', borderRadius: 8, padding: 12, marginBottom: 16,
+            borderLeft: `3px solid ${mlScore.prediction === 'WIN' ? '#22c55e' : '#ef4444'}`,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>🧠 ML Prediction</span>
+                <span style={{
+                  marginLeft: 8, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: mlScore.prediction === 'WIN' ? '#22c55e20' : '#ef444420',
+                  color: mlScore.prediction === 'WIN' ? '#22c55e' : '#ef4444',
+                }}>{mlScore.prediction}</span>
+              </div>
+              <span style={{
+                fontSize: 22, fontWeight: 800,
+                color: mlScore.ml_score >= 60 ? '#22c55e' : mlScore.ml_score >= 45 ? '#eab308' : '#ef4444',
+              }}>{mlScore.ml_score}%</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+              Confidence: {mlScore.confidence}% • XGBoost model
+            </div>
+          </div>
+        )}
+        
         {/* ---- Price Chart with EMA Lines ---- */}
         {chartData.length > 0 && (
           <>
