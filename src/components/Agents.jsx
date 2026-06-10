@@ -548,7 +548,7 @@ export default function Agents({
                       {d.type}
                     </span>
                     <span style={{ color: '#64748b' }}>
-                      {d.created_at ? new Date(d.created_at).toLocaleString() : ''}
+                      {d.created_at ? new Date(d.created_at + (d.created_at.endsWith('Z') ? '' : 'Z')).toLocaleString() : ''}
                     </span>
                   </div>
                   <div style={{ color: '#94a3b8', marginBottom: 4 }}>{d.reasoning}</div>
