@@ -4,7 +4,7 @@ import StockDetail from './StockDetail';
 
 export default function Stocks({
   assets, selectedSector, setSelectedSector,
-  selectedStock, setSelectedStock, livePrices, onBuy, onLoadFullStock,
+  selectedStock, setSelectedStock, livePrices, onBuy, onLoadFullStock,mlPredictions,
 }) {
   const getLivePrice = (t) => livePrices[t] || null;
   const filteredAssets = selectedSector
@@ -12,7 +12,7 @@ export default function Stocks({
     : assets;
 
   if (selectedStock) {
-    return <StockDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onBuy={onBuy} livePrice={livePrices[selectedStock.ticker]} />;
+    return <StockDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onBuy={onBuy} livePrice={livePrices[selectedStock.ticker]} mlScore={mlPredictions[selectedStock.ticker]} />;
   }
 
   return (
