@@ -12,7 +12,7 @@ export default function Stocks({
     : assets;
 
   if (selectedStock) {
-    return <StockDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onBuy={onBuy} />;
+    return <StockDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onBuy={onBuy} livePrice={livePrices[selectedStock.ticker]} />;
   }
 
   return (
