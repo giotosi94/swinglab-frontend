@@ -102,7 +102,7 @@ export default function Agents({
             }}
           >
             <span style={{ color: '#94a3b8', fontSize: 13 }}>
-              Last Run: {ps.last_run ? new Date(ps.last_run).toLocaleString() : 'Never'}
+              Last Run: {ps.last_run ? new Date(ps.last_run + (ps.last_run.endsWith('Z') ? '' : 'Z')).toLocaleString() : 'Never'}
             </span>
             <span style={{ color: '#94a3b8', fontSize: 13 }}>
               {pipeline.timing?.total && `\u23F1 ${pipeline.timing.total}s`}
