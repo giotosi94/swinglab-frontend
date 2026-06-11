@@ -383,9 +383,9 @@ export default function Alpaca({
                     </span>{' '}
                     <span style={{ fontWeight: 600 }}>{o.symbol}</span>{' '}
                     <span style={{ color: '#64748b' }}>x{o.qty}</span>
-                    {o.filled_avg_price && (
+                    {(o.filled_avg_price || o.limit_price) && (
                       <span style={{ color: '#94a3b8', marginLeft: 6 }}>
-                        @ ${o.filled_avg_price}
+                        @ ${o.filled_avg_price || o.limit_price}
                       </span>
                     )}
                     {o.legs && (
