@@ -225,10 +225,17 @@ export default function Alpaca({
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={equityPeriods[selectedPeriod]}>
                 <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  interval="preserveStartEnd"
-                />
+                dataKey="date"
+                tick={{ fontSize: 10, fill: '#64748b' }}
+                interval="preserveStartEnd"
+                tickFormatter={(val) => {
+                  const num = Number(val);
+                  if (num > 1000000000) {
+                    return new Date(num * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  }
+                  return val;
+                }}
+              />
                 <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748b' }} />
                 <Tooltip
                   contentStyle={{
