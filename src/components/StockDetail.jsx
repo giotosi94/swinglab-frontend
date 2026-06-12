@@ -593,6 +593,15 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
 
             return (
               <>
+                {stock.llm_analysis && (
+                  <div style={{
+                    background: '#0f172a', borderRadius: 6, padding: 10, marginBottom: 8,
+                    borderLeft: '3px solid #8b5cf6',
+                  }}>
+                    <span style={{ color: '#8b5cf6', fontWeight: 700, fontSize: 10 }}>🧠 AI Stock Analysis</span>
+                    <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 4, lineHeight: 1.5 }}>{stock.llm_analysis}</div>
+                  </div>
+                )}
                 {lines.map((line, i) => (
                   <div key={i} style={{ fontSize: 11, color: line.color, padding: '2px 0', fontWeight: line.bold ? 700 : 400 }}>
                     {line.icon} {line.text}
