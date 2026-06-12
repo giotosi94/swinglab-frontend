@@ -238,6 +238,15 @@ export default function Agents({
               </div>
             ))}
           </div>
+          {market.llm_reasoning && (
+            <div style={{
+              background: '#1e293b', borderRadius: 8, padding: 12, marginTop: 12,
+              borderLeft: '3px solid #8b5cf6', fontSize: 12, color: '#94a3b8', lineHeight: 1.6,
+            }}>
+              <span style={{ color: '#8b5cf6', fontWeight: 700, fontSize: 11 }}>🧠 AI Reasoning</span>
+              <div style={{ marginTop: 4 }}>{market.llm_reasoning}</div>
+            </div>
+          )}
         </div>
       )}
 
