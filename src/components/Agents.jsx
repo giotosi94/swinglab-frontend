@@ -9,7 +9,8 @@ export default function Agents({
 }) {
   const ps = agentsStatus?.pipeline_state;
   const ag = agentsStatus?.agents || {};
-  const market = ps?.market || {};
+  const brain = agentsStatus?.shared_brain?.market || {};
+  const market = { ...(ps?.market || {}), ...brain };
   const pipeline = ps?.pipeline || {};
   const riskReport = ps?.risk_report || {};
 
