@@ -158,7 +158,7 @@ export default function Trades() {
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{bestTrade.ticker}</span>
                 <span style={{ color: '#64748b', fontSize: 11, marginLeft: 8 }}>{bestTrade.setup_type}</span>
               </div>
-              <span style={{ color: '#22c55e', fontWeight: 700, fontSize: 18 }}>+{(bestTrade.pnl_pct || 0).toFixed(2)}%</span>
+              <span style={{ color: (bestTrade.pnl_pct || 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: 18 }}>{(bestTrade.pnl_pct || 0) >= 0 ? '+' : ''}{(bestTrade.pnl_pct || 0).toFixed(2)}%</span>
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{bestTrade.days_held || 0} days • ${(bestTrade.pnl_dollar || 0).toFixed(0)}</div>
           </div>
