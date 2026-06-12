@@ -302,7 +302,10 @@ export default function Agents({
                 >
                   {item.v}
                 </div>
-                {riskReport.llm_reasoning && (
+                </div>
+            ))}
+          </div>
+          {riskReport.llm_reasoning && (
             <div style={{
               background: '#1e293b', borderRadius: 8, padding: 12, marginTop: 12,
               borderLeft: '3px solid #eab308', fontSize: 12, color: '#94a3b8', lineHeight: 1.6,
@@ -311,9 +314,6 @@ export default function Agents({
               <div style={{ marginTop: 4 }}>{riskReport.llm_reasoning}</div>
             </div>
           )}
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
