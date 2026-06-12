@@ -12,7 +12,8 @@ export default function Agents({
   const brain = agentsStatus?.shared_brain?.market || {};
   const market = { ...(ps?.market || {}), ...brain };
   const pipeline = ps?.pipeline || {};
-  const riskReport = ps?.risk_report || {};
+  const brainRisk = agentsStatus?.shared_brain?.approved?.risk_report || {};
+  const riskReport = { ...(ps?.risk_report || {}), ...brainRisk };
 
   if (agentsLoading && !agentsStatus) {
     return (
