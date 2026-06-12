@@ -15,8 +15,6 @@ export default function Stocks({
   if (selectedStock) {
     return <StockDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onBuy={onBuy} livePrice={livePrices[selectedStock.ticker]} mlScore={mlPredictions[selectedStock.ticker]} trendData={trendPredictions[selectedStock.ticker]} />;
   }
-  }
-return <StockDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onBuy={onBuy} livePrice={livePrices[selectedStock.ticker]} mlScore={mlPredictions[selectedStock.ticker]} trendData={trendPredictions[selectedStock.ticker]} />;
   return (
     <div>
       {selectedSector && (
