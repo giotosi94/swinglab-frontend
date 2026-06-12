@@ -584,6 +584,21 @@ export default function Agents({
         </div>
       )}
 
+{/* Executor AI Reasoning */}
+      {agentsStatus?.shared_brain?.executions?.details?.llm_reasoning && (
+        <div style={{
+          background: '#0f172a', borderRadius: 12, padding: 16, marginTop: 20, border: '1px solid #1e293b',
+        }}>
+          <div style={{
+            background: '#1e293b', borderRadius: 8, padding: 12,
+            borderLeft: '3px solid #f97316', fontSize: 12, color: '#94a3b8', lineHeight: 1.6,
+          }}>
+            <span style={{ color: '#f97316', fontWeight: 700, fontSize: 11 }}>⚡ Executor AI Reasoning</span>
+            <div style={{ marginTop: 4 }}>{agentsStatus.shared_brain.executions.details.llm_reasoning}</div>
+          </div>
+        </div>
+      )}
+      
       {/* Last Actions */}
       {ps?.actions?.length > 0 && (
         <div
