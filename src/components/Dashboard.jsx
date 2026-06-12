@@ -14,6 +14,7 @@ export default function Dashboard({
   onGoToSector,
   onLoadFullStock,
   mlPredictions,
+  trendPredictions,
 }) {
   const getLivePrice = (t) => livePrices[t] || null;
   const topSetups = [...assets]
@@ -464,6 +465,15 @@ export default function Dashboard({
                     padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, marginLeft: 6,
                   }}>
                     🧠 {mlPredictions[a.ticker].ml_score}%
+                  </span>
+                )}
+                {trendPredictions[a.ticker] && (
+                  <span style={{
+                    background: trendPredictions[a.ticker].prediction === 'UP' ? '#22c55e20' : trendPredictions[a.ticker].prediction === 'DOWN' ? '#ef444420' : '#eab30820',
+                    color: trendPredictions[a.ticker].prediction === 'UP' ? '#22c55e' : trendPredictions[a.ticker].prediction === 'DOWN' ? '#ef4444' : '#eab308',
+                    padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, marginLeft: 4,
+                  }}>
+                    {trendPredictions[a.ticker].prediction === 'UP' ? '📈' : trendPredictions[a.ticker].prediction === 'DOWN' ? '📉' : '➡️'} {trendPredictions[a.ticker].up_prob}%
                   </span>
                 )}
               </div>
