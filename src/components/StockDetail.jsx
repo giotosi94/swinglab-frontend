@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { getScoreColor, getSmartAlert } from '../utils/helpers';
 
-export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore }) {
+export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, trendData }) {
   const alert = getSmartAlert(stock);
   const [buyQty, setBuyQty] = useState(1);
   const [buyLoading, setBuyLoading] = useState(false);
@@ -430,6 +430,45 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore }
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
               Confidence: {mlScore.confidence}% • XGBoost model
+            </div>
+          </div>
+        )}
+
+{/* ---- Trend Prediction ---- */}
+        {trendData && trendData.prediction && (
+          <div style={{
+            background: '#1e293b', borderRadius: 8, padding: 12, marginBottom: 16,
+            borderLeft: `3px solid ${trendData.prediction === 'UP' ? '#22c55e' : trendData.prediction === 'DOWN' ? '#ef4444' : '#eab308'}`,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>📈 Trend Prediction (5 days)</span>
+                <span style={{
+                  marginLeft: 8, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: trendData.prediction === 'UP' ? '#22c55e20' : trendData.prediction === 'DOWN' ? '#ef444420' : '#eab30820',
+                  color: trendData.prediction === 'UP' ? '#22c55e' : trendData.prediction === 'DOWN' ? '#ef4444' : '#eab308',
+                }}>{trendData.prediction}</span>
+              </div>
+              <span style={{ fontSize: 11, color: '#64748b' }}>
+                Conf: {trendData.confidence}%
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { label: 'UP', value: trendData.up_prob, color: '#22c55e' },
+                { label: 'FLAT', value: trendData.flat_prob, color: '#eab308' },
+                { label: 'DOWN', value: trendData.down_prob, color: '#ef4444' },
+              ].map((bar) => (
+                <div key={bar.label} style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8', marginBottom: 3 }}>
+                    <span>{bar.label}</span>
+                    <span style={{ color: bar.color, fontWeight: 700 }}>{bar.value}%</span>
+                  </div>
+                  <div style={{ background: '#0f172a', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                    <div style={{ width: `${bar.value}%`, height: '100%', background: bar.color, borderRadius: 4 }} />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
