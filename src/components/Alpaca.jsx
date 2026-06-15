@@ -320,6 +320,34 @@ export default function Alpaca({
                       {asset.sector_code}
                     </span>
                   )}
+                  {/* Target, Stop Loss & Buy Time */}
+                  {(() => {
+                    const bracketOrder = alpacaData.orders?.find(o =>
+                      o.symbol === p.symbol && o.side === 'buy' && o.status === 'filled' && o.legs
+                    );
+                    const tp = bracketOrder?.legs?.find(l => l.type === 'limit' || l.limit_price);
+                    const sl = bracketOrder?.legs?.find(l => l.type === 'stop' || l.stop_price);
+                    const buyTime = bracketOrder?.created_at;
+                    return (
+                      <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+                        {tp && (
+                          <span style={{ fontSize: 10, color: '#22c55e', background: '#22c55e15', padding: '1px 6px', borderRadius: 4 }}>
+                            🎯 TP ${tp.limit_price}
+                          </span>
+                        )}
+                        {sl && (
+                          <span style={{ fontSize: 10, color: '#ef4444', background: '#ef444415', padding: '1px 6px', borderRadius: 4 }}>
+                            🛑 SL ${sl.stop_price}
+                          </span>
+                        )}
+                        {buyTime && (
+                          <span style={{ fontSize: 10, color: '#64748b' }}>
+                            🕐 {new Date(buyTime).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <div style={{ textAlign: 'right' }}>
