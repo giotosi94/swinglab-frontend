@@ -17,8 +17,19 @@ import { getScoreColor, getSmartAlert } from '../utils/helpers';
 
 export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, trendData }) {
   const alert = getSmartAlert(stock);
-  const [buyQty, setBuyQty] = useState(1);
+ const [buyQty, setBuyQty] = useState(1);
   const [buyLoading, setBuyLoading] = useState(false);
+  const [newsData, setNewsData] = useState(null);
+
+  React.useEffect(() => {
+    if (stock?.ticker) {
+      const API = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
+      fetch(`${API}/api/data/news/${stock.ticker}`)
+        .then(r => r.json())
+        .then(d => { if (d && d.news) setNewsData(d); })
+        .catch(() => {});
+    }
+  }, [stock?.ticker]);
 
   const history = stock.price_history || [];
 
@@ -617,7 +628,43 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             );
           })()}
         </div>
-        
+
+        {/* ---- News & Sentiment ---- */}
+        {newsData && newsData.news?.length > 0 && (
+          <div style={{
+            background: '#1e293b', borderRadius: 8, padding: 12, marginBottom: 16,
+            borderLeft: '3px solid #06b6d4',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>📰 News ({newsData.news_count})</span>
+              {newsData.sentiment && (
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 700,
+                  background: newsData.sentiment.includes('POSITIVO') ? '#22c55e20' : newsData.sentiment.includes('NEGATIVO') ? '#ef444420' : '#eab30820',
+                  color: newsData.sentiment.includes('POSITIVO') ? '#22c55e' : newsData.sentiment.includes('NEGATIVO') ? '#ef4444' : '#eab308',
+                }}>
+                  {newsData.sentiment.includes('POSITIVO') ? '🟢' : newsData.sentiment.includes('NEGATIVO') ? '🔴' : '🟡'} AI Sentiment
+                </span>
+              )}
+            </div>
+            {newsData.sentiment && (
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8, lineHeight: 1.5, borderBottom: '1px solid #334155', paddingBottom: 8 }}>
+                {newsData.sentiment}
+              </div>
+            )}
+            {newsData.news.slice(0, 3).map((n, i) => (
+              <div key={i} style={{ fontSize: 11, color: '#94a3b8', padding: '4px 0', borderBottom: i < 2 ? '1px solid #0f172a' : 'none' }}>
+                <a href={n.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+                  {n.headline}
+                </a>
+                <div style={{ fontSize: 9, color: '#475569', marginTop: 2 }}>
+                  {n.source} • {n.created_at ? new Date(n.created_at).toLocaleDateString() : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ---- Price Chart with EMA Lines ---- */}
         {chartData.length > 0 && (
           <>
