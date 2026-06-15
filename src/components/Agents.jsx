@@ -249,6 +249,11 @@ export default function Agents({
               <div style={{ marginTop: 4 }}>{market.llm_reasoning}</div>
             </div>
           )}
+          {market.llm_reasoning && (
+            <div style={{ fontSize: 10, color: '#475569', marginTop: 4, fontStyle: 'italic' }}>
+              💬 Questo reasoning viene letto da Alpha, Risk e Executor
+            </div>
+          )}
         </div>
       )}
 
