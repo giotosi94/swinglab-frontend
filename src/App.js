@@ -1,419 +1,191 @@
-import React, { useState, useEffect } from 'react';
-import './App.css';
+/* ==========================================
+   SwingLab — App.css (Mobile Responsive)
+   ========================================== */
 
-import Navbar from './components/Navbar';
-import Dashboard from './components/Dashboard';
-import Sectors from './components/Sectors';
-import Stocks from './components/Stocks';
-import Agents from './components/Agents';
-import Alpaca from './components/Alpaca';
-import Settings from './components/Settings';
-import Guide from './components/Guide';
-import Trades from './components/Trades';
-
-const API = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
-
-function App() {
-  // ===== STATE =====
-  const [sectors, setSectors] = useState([]);
-  const [assets, setAssets] = useState([]);
-  const [view, setView] = useState('dashboard');
-  const [selectedSector, setSelectedSector] = useState(null);
-  const [selectedStock, setSelectedStock] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [traderData, setTraderData] = useState(null);
-  const [traderLoading, setTraderLoading] = useState(false);
-  const [alpacaData, setAlpacaData] = useState(null);
-  const [livePrices, setLivePrices] = useState({});
-  const [equityPeriods, setEquityPeriods] = useState({});
-  const [marketData, setMarketData] = useState({});
-  const [selectedPeriod, setSelectedPeriod] = useState('1M');
-  const [mlPredictions, setMlPredictions] = useState({});
-  // Agents
-  const [agentsStatus, setAgentsStatus] = useState(null);
-  const [agentsLoading, setAgentsLoading] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState(null);
-  const [agentDecisions, setAgentDecisions] = useState([]);
-  const [pipelineRunning, setPipelineRunning] = useState(false);
-  const [learningRunning, setLearningRunning] = useState(false);
-  // Settings
-  const [settings, setSettings] = useState({
-    max_positions: 5,
-    risk_pct_per_trade: 2,
-    max_position_pct: 20,
-    min_risk_reward: 1.5,
-    max_per_sector: 2,
-    daily_loss_limit_pct: -3,
-    weekly_loss_limit_pct: -5,
-    starting_capital: 100000,
-  });
-  const [settingsSaving, setSettingsSaving] = useState(false);
-
-  // ===== FETCH FUNCTIONS =====
-  const fetchMarket = async () => {
-    try {
-      const r = await fetch(`${API}/api/data/market`);
-      const d = await r.json();
-      if (d && typeof d === 'object') setMarketData(d);
-    } catch (e) {}
-  };
-
-  const fetchEquityHistory = async () => {
-    try {
-      const r = await fetch(`${API}/api/data/alpaca/history`);
-      const d = await r.json();
-      if (d && typeof d === 'object') setEquityPeriods(d);
-    } catch (e) {}
-  };
-
-  const fetchLivePrices = async () => {
-    try {
-      const r = await fetch(`${API}/api/data/live`);
-      const d = await r.json();
-      if (d && typeof d === 'object' && !d.detail) setLivePrices(d);
-    } catch (e) {}
-  };
-
-  const fetchAlpaca = async () => {
-    try {
-      const r = await fetch(`${API}/api/data/alpaca`);
-      const d = await r.json();
-      if (!d.error) setAlpacaData(d);
-    } catch (e) {}
-  };
-
-  const alpacaBuy = async (s, q) => {
-    try {
-      await fetch(`${API}/api/data/alpaca/buy?symbol=${s}&qty=${q}`, {
-        method: 'POST',
-      });
-      await fetchAlpaca();
-    } catch (e) {
-      alert('Buy failed');
-    }
-  };
-
-  const alpacaClose = async (s) => {
-    try {
-      await fetch(`${API}/api/data/alpaca/close/${s}`, { method: 'POST' });
-      await fetchAlpaca();
-    } catch (e) {
-      alert('Close failed');
-    }
-  };
-
-  const alpacaCloseAll = async () => {
-    if (!window.confirm('Close ALL positions?')) return;
-    try {
-      await fetch(`${API}/api/data/alpaca/close-all`, { method: 'POST' });
-      await fetchAlpaca();
-    } catch (e) {}
-  };
-
-  const fetchTrader = async () => {
-    try {
-      const r = await fetch(`${API}/api/data/autotrader`);
-      const d = await r.json();
-      if (!d.error) setTraderData(d);
-    } catch (e) {}
-  };
-
-  const runTrader = async () => {
-    setTraderLoading(true);
-    try {
-      await fetch(`${API}/api/data/autotrader/run`, { method: 'POST' });
-      await fetchTrader();
-      await fetchAlpaca();
-    } catch (e) {}
-    setTraderLoading(false);
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setSearching(true);
-    try {
-      const r = await fetch(
-        `${API}/api/data/search/${searchQuery.trim().toUpperCase()}`
-      );
-      const d = await r.json();
-      if (d.error) alert(d.error);
-      else {
-        setSelectedStock(d);
-        setView('stocks');
-      }
-    } catch (e) {
-      alert('Search failed');
-    }
-    setSearching(false);
-    setSearchQuery('');
-  };
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [s, a] = await Promise.all([
-        fetch(`${API}/api/sectors`),
-        fetch(`${API}/api/assets?limit=250`),
-      ]);
-      setSectors(await s.json());
-      setAssets(await a.json());
-    } catch (e) {}
-    setLoading(false);
-  };
-  
-  // Load full stock data (with price_history, charts, etc.)
-  const loadFullStock = async (ticker) => {
-    try {
-      const r = await fetch(`${API}/api/data/search/${ticker}`);
-      const d = await r.json();
-      if (d && !d.error) {
-        setSelectedStock(d);
-      }
-    } catch (e) {
-      console.error('Load stock failed', e);
-    }
-  };
-
-  const fetchMlPredictions = async () => {
-    try {
-      const r = await fetch(`${API}/api/ml/predict/all`);
-      const d = await r.json();
-      if (d && d.top_20) {
-        const map = {};
-        d.top_20.forEach(p => { map[p.ticker] = p; });
-        setMlPredictions(map);
-      }
-    } catch (e) {}
-  };
-
-  const [trendPredictions, setTrendPredictions] = useState({});
-
-  const fetchTrendPredictions = async () => {
-    try {
-      const r = await fetch(`${API}/api/ml/trend/all`);
-      const d = await r.json();
-      if (d && d.predictions) {
-        const map = {};
-        d.predictions.forEach(p => { map[p.ticker] = p; });
-        setTrendPredictions(map);
-      }
-    } catch (e) {}
-  };
-
-  // Agents
-  const fetchAgentsStatus = async () => {
-    setAgentsLoading(true);
-    try {
-      const r = await fetch(`${API}/api/agents/status`);
-      const d = await r.json();
-      if (d && !d.error) setAgentsStatus(d);
-    } catch (e) {}
-    setAgentsLoading(false);
-  };
-
-  const fetchAgentDecisions = async (n) => {
-    try {
-      const r = await fetch(`${API}/api/agents/${n}/decisions?limit=20`);
-      const d = await r.json();
-      if (d.decisions) setAgentDecisions(d.decisions);
-    } catch (e) {}
-  };
-
-  const runPipeline = async () => {
-    setPipelineRunning(true);
-    try {
-      await fetch(`${API}/api/agents/run`, { method: 'POST' });
-      await fetchAgentsStatus();
-      await fetchTrader();
-      await fetchAlpaca();
-    } catch (e) {
-      alert('Pipeline failed');
-    }
-    setPipelineRunning(false);
-  };
-
-  const runLearning = async () => {
-    setLearningRunning(true);
-    try {
-      await fetch(`${API}/api/agents/learn`, { method: 'POST' });
-      await fetchAgentsStatus();
-    } catch (e) {
-      alert('Learning failed');
-    }
-    setLearningRunning(false);
-  };
-
-  // Settings
-  const fetchSettings = async () => {
-    try {
-      const r = await fetch(`${API}/api/settings`);
-      const d = await r.json();
-      if (d && !d.error && d.max_positions)
-        setSettings((p) => ({ ...p, ...d }));
-    } catch (e) {}
-  };
-
-  const saveSettings = async () => {
-    setSettingsSaving(true);
-    try {
-      await fetch(`${API}/api/settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-      alert('Settings saved!');
-    } catch (e) {
-      alert('Save failed');
-    }
-    setSettingsSaving(false);
-  };
-
-  // ===== EFFECTS =====
-  useEffect(() => {
-    fetchData();
-    fetchTrader();
-    fetchAlpaca();
-    fetchLivePrices();
-    fetchEquityHistory();
-    fetchMarket();
-    fetchSettings();
-    fetchAgentsStatus();
-    fetchMlPredictions();
-    fetchTrendPredictions();
-    const p = setInterval(fetchLivePrices, 15000);
-    const a = setInterval(fetchAlpaca, 60000);
-    const d = setInterval(fetchData, 300000);
-    return () => {
-      clearInterval(p);
-      clearInterval(a);
-      clearInterval(d);
-    };
-    // eslint-disable-next-line
-  }, []);
-
-  useEffect(() => {
-    if (view === 'agents') fetchAgentsStatus();
-    // eslint-disable-next-line
-  }, [view]);
-
-  // ===== RENDER HELPERS =====
-  const handleDashboardStockSelect = (stock) => {
-    setSelectedStock(stock);
-    setView('stocks');
-  };
-
-  // ===== MAIN RENDER =====
-  return (
-    <div
-      style={{
-        background: '#0a0e17',
-        minHeight: '100vh',
-        color: 'white',
-        fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif',
-      }}
-    >
-      <Navbar
-        view={view}
-        setView={setView}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        handleSearch={handleSearch}
-        searching={searching}
-        traderData={traderData}
-        setSelectedStock={setSelectedStock}
-        setSelectedSector={setSelectedSector}
-      />
-
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: 20 }}>
-        {loading && !['agents', 'settings', 'guide'].includes(view) ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
-            Loading...
-          </div>
-        ) : view === 'dashboard' ? (
-          <Dashboard
-            marketData={marketData}
-            assets={assets}
-            livePrices={livePrices}
-            setSelectedStock={handleDashboardStockSelect}
-            alpacaData={alpacaData}
-            sectors={sectors}
-            agentsStatus={agentsStatus}
-            onGoToAlpaca={() => setView('alpaca')}
-            onGoToAgents={() => setView('agents')}
-            onGoToSector={(code) => {
-              setSelectedSector(code);
-              setView('stocks');
-            }}
-          onLoadFullStock={(ticker) => {
-              loadFullStock(ticker);
-              setView('stocks');
-            }}
-            mlPredictions={mlPredictions}
-            trendPredictions={trendPredictions}
-          />
-        ) : view === 'sectors' ? (
-          <Sectors
-            sectors={sectors}
-            setSelectedSector={setSelectedSector}
-            setView={setView}
-          />
-        ) : view === 'stocks' ? (
-          <Stocks
-            assets={assets}
-            selectedSector={selectedSector}
-            setSelectedSector={setSelectedSector}
-            selectedStock={selectedStock}
-            setSelectedStock={setSelectedStock}
-            livePrices={livePrices}
-           onBuy={alpacaBuy}
-            onLoadFullStock={loadFullStock}
-            mlPredictions={mlPredictions}
-            trendPredictions={trendPredictions}
-          />
-        ) : view === 'agents' ? (
-          <Agents
-            agentsStatus={agentsStatus}
-            agentsLoading={agentsLoading}
-            selectedAgent={selectedAgent}
-            setSelectedAgent={setSelectedAgent}
-            agentDecisions={agentDecisions}
-            fetchAgentDecisions={fetchAgentDecisions}
-            runPipeline={runPipeline}
-            runLearning={runLearning}
-            pipelineRunning={pipelineRunning}
-            learningRunning={learningRunning}
-            fetchAgentsStatus={fetchAgentsStatus}
-          />
-        ) : view === 'alpaca' ? (
-          <Alpaca
-            alpacaData={alpacaData}
-            equityPeriods={equityPeriods}
-            selectedPeriod={selectedPeriod}
-            setSelectedPeriod={setSelectedPeriod}
-            alpacaBuy={alpacaBuy}
-            alpacaClose={alpacaClose}
-            alpacaCloseAll={alpacaCloseAll}
-            assets={assets}
-            settings={settings}
-          />
-        ) : view === 'trades' ? (
-          <Trades />
-        ) : view === 'settings' ? (
-          <Settings
-            settings={settings}
-            setSettings={setSettings}
-            saveSettings={saveSettings}
-            settingsSaving={settingsSaving}
-            alpacaData={alpacaData}
-          />
-        ) : view === 'guide' ? (
-          <Guide />
-        ) : null}
-      </div>
-    </div>
-  );
+/* ---- Base ---- */
+* {
+  box-sizing: border-box;
 }
 
-export default App;
+body {
+  margin: 0;
+  padding: 0;
+  background: #0a0e17;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ---- Input/Select focus ---- */
+input:focus, select:focus, button:focus {
+  outline: none;
+}
+
+/* ---- Range slider ---- */
+input[type="range"] {
+  -webkit-appearance: none;
+  height: 4px;
+  background: #334155;
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+}
+
+/* ==========================================
+   MOBILE RESPONSIVE (< 768px)
+   ========================================== */
+@media (max-width: 768px) {
+  /* Metrics → 4 columns */
+  div[style*="minmax(100px"] {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 4px !important;
+  }
+
+  /* Stock cards → single column */
+  div[style*="minmax(280px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Settings → single column */
+  div[style*="minmax(320px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Sector heatmap → 3 columns */
+  div[style*="minmax(120px"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  /* Agent pipeline → smaller */
+  div[style*="minWidth: 130"] {
+    min-width: 100px !important;
+    padding: 8px 10px !important;
+  }
+
+  /* Headers smaller */
+  h2 {
+    font-size: 18px !important;
+  }
+  h3 {
+    font-size: 14px !important;
+  }
+}
+
+/* ==========================================
+   SMALL MOBILE (< 480px)
+   ========================================== */
+@media (max-width: 480px) {
+  /* Metrics → 2 columns */
+  div[style*="minmax(100px"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  div[style*="minmax(150px"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  div[style*="minmax(130px"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Sector heatmap → 2 columns */
+  div[style*="minmax(120px"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Agent pipeline → very small */
+  div[style*="minWidth: 130"] {
+    min-width: 70px !important;
+    padding: 6px 8px !important;
+  }
+
+  /* Font sizes */
+  h2 {
+    font-size: 16px !important;
+  }
+}
+
+/* ==========================================
+   TOAST NOTIFICATIONS
+   ========================================== */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: white;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: slideIn 0.3s ease-out;
+  max-width: 350px;
+}
+
+.toast-success {
+  border-left: 3px solid #22c55e;
+}
+
+.toast-error {
+  border-left: 3px solid #ef4444;
+}
+
+.toast-info {
+  border-left: 3px solid #3b82f6;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* ==========================================
+   LOADING SKELETON
+   ========================================== */
+.skeleton {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
