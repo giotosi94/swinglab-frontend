@@ -343,6 +343,41 @@ export default function Alpaca({
           </div>
         </div>
       )}
+      {/* ===== Portfolio Summary ===== */}
+      {alpacaData.positions?.length > 0 && (
+        <div style={{
+          background: '#0f172a', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid #1e293b',
+        }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>💼 Portfolio Summary</h3>
+          {(() => {
+            const positions = alpacaData.positions || [];
+            const totalInvested = positions.reduce((s, p) => s + (p.entry_price * p.qty), 0);
+            const totalValue = positions.reduce((s, p) => s + (p.current_price * p.qty), 0);
+            const totalPnl = positions.reduce((s, p) => s + (p.pnl || 0), 0);
+            const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+            const winners = positions.filter(p => p.pnl_pct >= 0).length;
+            const losers = positions.filter(p => p.pnl_pct < 0).length;
+
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+                {[
+                  { l: 'Invested', v: `$${totalInvested.toLocaleString(undefined, {maximumFractionDigits: 0})}` },
+                  { l: 'Current Value', v: `$${totalValue.toLocaleString(undefined, {maximumFractionDigits: 0})}` },
+                  { l: 'Unrealized P&L', v: `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(0)}`, c: totalPnl >= 0 ? '#22c55e' : '#ef4444' },
+                  { l: 'Unrealized %', v: `${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(2)}%`, c: totalPnlPct >= 0 ? '#22c55e' : '#ef4444' },
+                  { l: 'Winners', v: `${winners} 🟢`, c: '#22c55e' },
+                  { l: 'Losers', v: `${losers} 🔴`, c: '#ef4444' },
+                ].map(m => (
+                  <div key={m.l} style={{ background: '#1e293b', borderRadius: 8, padding: 10, textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{m.l}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: m.c || 'white', marginTop: 2 }}>{m.v}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
       {/* ===== Positions ===== */}
       {alpacaData.positions?.length > 0 && (
         <div style={{ marginBottom: 20 }}>
