@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { getSetupBadge } from '../utils/helpers';
 
@@ -11,6 +11,16 @@ export default function Alpaca({
   const [buyTicker, setBuyTicker] = useState('');
   const [buyQty, setBuyQty] = useState(1);
   const [buyLoading, setBuyLoading] = useState(false);
+  const [spyData, setSpyData] = useState(null);
+  const [showBenchmark, setShowBenchmark] = useState(true);
+
+  React.useEffect(() => {
+    const API_URL = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
+    fetch(`${API_URL}/api/data/benchmark/spy`)
+      .then(r => r.json())
+      .then(d => { if (d && d.points) setSpyData(d); })
+      .catch(() => {});
+  }, []);
 
   // Build asset map for setup badges on positions
   const assetMap = {};
@@ -190,74 +200,149 @@ export default function Alpaca({
         </div>
       </div>
 
-      {/* ===== Equity Chart ===== */}
+     {/* ========== EQUITY + BENCHMARK CHART ========== */}
       {Object.keys(equityPeriods).length > 0 && (
-        <div
-          style={{
-            background: '#0f172a',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 20,
-            border: '1px solid #1e293b',
-          }}
-        >
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            {['1D','1W','1M','3M','6M','1Y','YTD'].filter(p => equityPeriods[p]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setSelectedPeriod(p)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 6,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  fontWeight: 600,
+        <div style={{
+          background: '#0f172a', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid #1e293b',
+        }}>
+          {/* Period selector + benchmark toggle */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {['1D', '1W', '1M', '3M', '6M', '1Y', 'YTD'].filter(p => equityPeriods[p]).map((p) => (
+                <button key={p} onClick={() => setSelectedPeriod(p)} style={{
+                  padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 600,
                   background: selectedPeriod === p ? '#3b82f6' : '#1e293b',
                   color: selectedPeriod === p ? 'white' : '#64748b',
-                }}
-              >
-                {p}
+                }}>
+                  {p}
+                </button>
+              ))}
+            </div>
+            {spyData && (
+              <button onClick={() => setShowBenchmark(!showBenchmark)} style={{
+                padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontSize: 10, fontWeight: 600,
+                background: showBenchmark ? '#64748b20' : '#1e293b',
+                color: showBenchmark ? '#94a3b8' : '#475569',
+              }}>
+                {showBenchmark ? '📊 Hide SPY' : '📊 Show SPY'}
               </button>
-            ))}
+            )}
           </div>
+
+          {/* Performance Summary */}
+          {(() => {
+            const data = equityPeriods[selectedPeriod] || [];
+            if (data.length < 2) return null;
+            const startEq = data[0]?.equity || 0;
+            const endEq = data[data.length - 1]?.equity || 0;
+            const pnl = endEq - startEq;
+            const pnlPct = startEq > 0 ? (pnl / startEq) * 100 : 0;
+            const spyReturn = spyData?.total_return || 0;
+            const alpha = pnlPct - spyReturn;
+            const eqColor = pnl >= 0 ? '#22c55e' : '#ef4444';
+
+            return (
+              <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div>
+                  <span style={{ fontSize: 10, color: '#64748b' }}>SwingLab</span>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: eqColor }}>
+                    {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                  </div>
+                  <span style={{ fontSize: 11, color: eqColor }}>
+                    {pnl >= 0 ? '+' : ''}${pnl.toFixed(0)}
+                  </span>
+                </div>
+                {spyData && showBenchmark && (
+                  <div>
+                    <span style={{ fontSize: 10, color: '#64748b' }}>SPY</span>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: spyReturn >= 0 ? '#22c55e80' : '#ef444480' }}>
+                      {spyReturn >= 0 ? '+' : ''}{spyReturn.toFixed(2)}%
+                    </div>
+                  </div>
+                )}
+                {spyData && showBenchmark && (
+                  <div style={{
+                    padding: '4px 10px', borderRadius: 8,
+                    background: alpha >= 0 ? '#22c55e20' : '#ef444420',
+                    border: `1px solid ${alpha >= 0 ? '#22c55e40' : '#ef444440'}`,
+                  }}>
+                    <span style={{ fontSize: 10, color: '#64748b' }}>Alpha</span>
+                    <div style={{
+                      fontSize: 16, fontWeight: 800,
+                      color: alpha >= 0 ? '#22c55e' : '#ef4444',
+                    }}>
+                      {alpha >= 0 ? '+' : ''}{alpha.toFixed(2)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Chart with benchmark */}
           {equityPeriods[selectedPeriod] && (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={equityPeriods[selectedPeriod]}>
-                <XAxis
-                dataKey="date"
-                tick={{ fontSize: 10, fill: '#64748b' }}
-                interval="preserveStartEnd"
-                tickFormatter={(val) => {
-                  const num = Number(val);
-                  if (num > 1000000000) {
-                    return new Date(num * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                  }
-                  return val;
-                }}
-              />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748b' }} />
-                <Tooltip
-                  contentStyle={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: 8,
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={(() => {
+                const eqData = equityPeriods[selectedPeriod] || [];
+                if (!eqData.length) return [];
+                const startEq = eqData[0]?.equity || 100000;
+                const spyByDate = {};
+                if (spyData?.points && showBenchmark) {
+                  const spyStart = spyData.points[0]?.price || 1;
+                  spyData.points.forEach(p => {
+                    spyByDate[p.date] = parseFloat(((p.price - spyStart) / spyStart * 100).toFixed(2));
+                  });
+                }
+                return eqData.map(point => ({
+                  date: point.date,
+                  swinglab: parseFloat(((point.equity - startEq) / startEq * 100).toFixed(2)),
+                  spy: spyByDate[point.date] ?? null,
+                }));
+              })()}>
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} interval="preserveStartEnd"
+                  tickFormatter={(val) => {
+                    const num = Number(val);
+                    if (num > 1000000000) return new Date(num * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return val;
                   }}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="equity"
-                  stroke={equityColor}
-                  fill={equityColor}
-                  fillOpacity={0.1}
-                  strokeWidth={2}
+                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} domain={['auto', 'auto']}
+                  tickFormatter={(v) => `${v}%`}
                 />
+                <Tooltip
+                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 11 }}
+                  formatter={(value, name) => {
+                    if (name === 'swinglab') return [`${value}%`, '📈 SwingLab'];
+                    if (name === 'spy') return [`${value}%`, '📊 SPY'];
+                    return [value, name];
+                  }}
+                />
+                <ReferenceLine y={0} stroke="#334155" strokeDasharray="3 3" />
+                <Area type="monotone" dataKey="swinglab" stroke={periodPnL.pnl >= 0 ? '#22c55e' : '#ef4444'}
+                  fill={periodPnL.pnl >= 0 ? '#22c55e' : '#ef4444'} fillOpacity={0.1} strokeWidth={2} name="swinglab" />
+                {showBenchmark && spyData && (
+                  <Area type="monotone" dataKey="spy" stroke="#64748b" fill="none"
+                    strokeWidth={1.5} strokeDasharray="4 4" name="spy" />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           )}
+
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
+            <span style={{ fontSize: 10, color: periodPnL.pnl >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+              ━━ SwingLab
+            </span>
+            {showBenchmark && spyData && (
+              <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
+                ┅┅ SPY Benchmark
+              </span>
+            )}
+          </div>
         </div>
       )}
-
       {/* ===== Positions ===== */}
       {alpacaData.positions?.length > 0 && (
         <div style={{ marginBottom: 20 }}>
