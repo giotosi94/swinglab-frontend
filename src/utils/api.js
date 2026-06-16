@@ -60,6 +60,9 @@ export async function fetchSectorsAndAssets(limit = 250) {
   }
 }
 
+// ---------- Analytics ----------
+export const fetchAnalytics = () => get('/api/trades/analytics');
+
 // ---------- Agents ----------
 export const fetchAgentsStatus = () => get('/api/agents/status');
 export const fetchAgentDecisions = (name, limit = 20) => get(`/api/agents/${name}/decisions?limit=${limit}`);
