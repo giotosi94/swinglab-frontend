@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const API = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
+import * as api from '../utils/api';
 
 const SETUP_COLORS = {
   breakout: '#22c55e',
@@ -30,14 +30,12 @@ export default function Trades() {
     const load = async () => {
       setLoading(true);
       try {
-        const [tRes, dRes] = await Promise.all([
-          fetch(`${API}/api/trades/history?limit=200`),
-          fetch(`${API}/api/trades/daily`),
-        ]);
-        const tData = await tRes.json();
-        const dData = await dRes.json();
-        if (Array.isArray(tData)) setTrades(tData);
-        if (dData && !dData.error) setDailySummary(dData);
+        const [tData, dData] = await Promise.all([
+  api.fetchTradeHistory(200),
+  api.fetchDailySummary(),
+]);
+if (Array.isArray(tData)) setTrades(tData);
+if (dData && !dData.error) setDailySummary(dData);
       } catch (e) {
         console.error('Failed to load trades', e);
       }
