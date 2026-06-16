@@ -3,6 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { getSetupBadge } from '../utils/helpers';
+import { fetchBenchmark } from '../utils/api';
 
 export default function Alpaca({
   alpacaData, equityPeriods, selectedPeriod, setSelectedPeriod,
@@ -15,12 +16,10 @@ export default function Alpaca({
   const [showBenchmark, setShowBenchmark] = useState(true);
 
   React.useEffect(() => {
-    const API_URL = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
-    fetch(`${API_URL}/api/data/benchmark/spy?period=${selectedPeriod}`)
-      .then(r => r.json())
-      .then(d => { if (d && d.points) setSpyData(d); })
-      .catch(() => {});
-  }, [selectedPeriod]);
+  fetchBenchmark(selectedPeriod)
+    .then(d => { if (d && d.points) setSpyData(d); })
+    .catch(() => {});
+}, [selectedPeriod]);
 
   // Build asset map for setup badges on positions
   const assetMap = {};
