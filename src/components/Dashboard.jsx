@@ -361,17 +361,17 @@ export default function Dashboard({
                 <div style={{ fontSize: 11, color: '#64748b' }}>
                   {emoji} {sym}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>
-                  ${data.price?.toLocaleString()}
+               <div style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>
+                  ${(livePrices[sym]?.price || data.price)?.toLocaleString()}
                 </div>
                 <div
                   style={{
                     fontSize: 11,
-                    color: data.change_pct >= 0 ? '#22c55e' : '#ef4444',
+                    color: (livePrices[sym]?.change_pct ?? data.change_pct) >= 0 ? '#22c55e' : '#ef4444',
                   }}
                 >
-                  {data.change_pct >= 0 ? '+' : ''}
-                  {data.change_pct?.toFixed(2)}%
+                  {(livePrices[sym]?.change_pct ?? data.change_pct) >= 0 ? '+' : ''}
+                  {(livePrices[sym]?.change_pct ?? data.change_pct)?.toFixed(2)}%
                 </div>
               </div>
             );
