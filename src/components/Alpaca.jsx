@@ -16,11 +16,11 @@ export default function Alpaca({
 
   React.useEffect(() => {
     const API_URL = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
-    fetch(`${API_URL}/api/data/benchmark/spy`)
+    fetch(`${API_URL}/api/data/benchmark/spy?period=${selectedPeriod}`)
       .then(r => r.json())
       .then(d => { if (d && d.points) setSpyData(d); })
       .catch(() => {});
-  }, []);
+  }, [selectedPeriod]);
 
   // Build asset map for setup badges on positions
   const assetMap = {};
