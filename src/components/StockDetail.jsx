@@ -14,6 +14,7 @@ import {
   Cell,
 } from 'recharts';
 import { getScoreColor, getSmartAlert } from '../utils/helpers';
+import { fetchNews } from '../utils/api';
 
 export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, trendData }) {
   const alert = getSmartAlert(stock);
@@ -22,14 +23,12 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
   const [newsData, setNewsData] = useState(null);
 
   React.useEffect(() => {
-    if (stock?.ticker) {
-      const API = process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
-      fetch(`${API}/api/data/news/${stock.ticker}`)
-        .then(r => r.json())
-        .then(d => { if (d && d.news) setNewsData(d); })
-        .catch(() => {});
-    }
-  }, [stock?.ticker]);
+  if (stock?.ticker) {
+    fetchNews(stock.ticker)
+      .then(d => { if (d && d.news) setNewsData(d); })
+      .catch(() => {});
+  }
+}, [stock?.ticker]);
 
   const history = stock.price_history || [];
 
