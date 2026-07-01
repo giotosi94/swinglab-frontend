@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { getSetupBadge } from '../utils/helpers';
-import { fetchBenchmark } from '../utils/api';
+import { fetchBenchmark, fetchPositionsDetail } from '../utils/api';
 
 export default function Alpaca({
   alpacaData, equityPeriods, selectedPeriod, setSelectedPeriod,
@@ -15,11 +15,31 @@ export default function Alpaca({
   const [spyData, setSpyData] = useState(null);
   const [showBenchmark, setShowBenchmark] = useState(true);
 
-  React.useEffect(() => {
-  fetchBenchmark(selectedPeriod)
-    .then(d => { if (d && d.points) setSpyData(d); })
-    .catch(() => {});
-}, [selectedPeriod]);
+  // 🆕 v3.4 — Positions detail with SL/TP from DB (fractional shares)
+  const [positionsDetail, setPositionsDetail] = useState({});
+
+  useEffect(() => {
+    fetchBenchmark(selectedPeriod)
+      .then(d => { if (d && d.points) setSpyData(d); })
+      .catch(() => {});
+  }, [selectedPeriod]);
+
+  // 🆕 v3.4 — Fetch positions detail (SL/TP dal DB)
+  useEffect(() => {
+    async function loadDetail() {
+      const data = await fetchPositionsDetail();
+      if (data && data.positions) {
+        // Trasforma array in mappa per lookup veloce
+        const map = {};
+        data.positions.forEach(p => { map[p.ticker] = p; });
+        setPositionsDetail(map);
+      }
+    }
+    loadDetail();
+    // Refresh ogni 30 secondi
+    const interval = setInterval(loadDetail, 30000);
+    return () => clearInterval(interval);
+  }, [alpacaData]);
 
   // Build asset map for setup badges on positions
   const assetMap = {};
@@ -40,7 +60,6 @@ export default function Alpaca({
   };
 
   const periodPnL = getPeriodPnL();
-  const equityColor = periodPnL.pnl >= 0 ? '#22c55e' : '#ef4444';
 
   // Handle buy
   const handleBuy = async () => {
@@ -67,6 +86,22 @@ export default function Alpaca({
       expired: '#475569',
       rejected: '#ef4444',
     }[status] || '#64748b');
+
+  // 🆕 v3.4 — Colore dinamico distanza SL/TP
+  const getDistanceColor = (distancePct, isTarget) => {
+    // Per target: se molto vicino a target = verde (buono)
+    // Per stop: se molto vicino a stop = rosso (pericolo)
+    const abs = Math.abs(distancePct);
+    if (isTarget) {
+      if (abs < 2) return '#22c55e';  // vicino target = verde
+      if (abs < 5) return '#eab308';  // medio
+      return '#94a3b8';  // lontano = neutro
+    } else {
+      if (abs < 2) return '#ef4444';  // vicino stop = rosso
+      if (abs < 5) return '#eab308';  // medio
+      return '#94a3b8';  // lontano stop = neutro
+    }
+  };
 
   if (!alpacaData) {
     return (
@@ -127,7 +162,7 @@ export default function Alpaca({
         ))}
       </div>
 
-      {/* ===== [NEW] Quick Buy Form ===== */}
+      {/* ===== Quick Buy Form ===== */}
       <div
         style={{
           background: '#0f172a',
@@ -199,7 +234,7 @@ export default function Alpaca({
         </div>
       </div>
 
-     {/* ========== EQUITY + BENCHMARK CHART ========== */}
+      {/* ========== EQUITY + BENCHMARK CHART ========== */}
       {Object.keys(equityPeriods).length > 0 && (
         <div style={{
           background: '#0f172a', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid #1e293b',
@@ -342,6 +377,7 @@ export default function Alpaca({
           </div>
         </div>
       )}
+
       {/* ===== Portfolio Summary ===== */}
       {alpacaData.positions?.length > 0 && (
         <div style={{
@@ -377,7 +413,8 @@ export default function Alpaca({
           })()}
         </div>
       )}
-      {/* ===== Positions ===== */}
+
+      {/* ===== Positions (with software SL/TP from DB) ===== */}
       {alpacaData.positions?.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div
@@ -391,23 +428,39 @@ export default function Alpaca({
             <h3 style={{ margin: 0 }}>
               Positions ({alpacaData.positions.length})
             </h3>
-            <button
-              onClick={alpacaCloseAll}
-              style={{
-                padding: '4px 10px',
-                borderRadius: 6,
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 11,
-              }}
-            >
-              Close All
-            </button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  color: '#22c55e',
+                  background: '#22c55e15',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  border: '1px solid #22c55e33',
+                }}
+              >
+                {'\uD83D\uDEE1\uFE0F'} Software SL/TP active
+              </span>
+              <button
+                onClick={alpacaCloseAll}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  background: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                }}
+              >
+                Close All
+              </button>
+            </div>
           </div>
           {alpacaData.positions.map((p) => {
             const asset = assetMap[p.symbol];
+            const detail = positionsDetail[p.symbol]; // 🆕 dati DB (SL/TP)
+
             return (
               <div
                 key={p.symbol}
@@ -417,88 +470,172 @@ export default function Alpaca({
                   padding: 12,
                   marginBottom: 8,
                   border: '1px solid #1e293b',
+                }}
+              >
+                {/* Top row: ticker info + P&L + Close button */}
+                <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   flexWrap: 'wrap',
                   gap: 8,
-                }}
-              >
-                <div>
-                  <span style={{ fontWeight: 700, marginRight: 8 }}>{p.symbol}</span>
-                  <span style={{ color: '#64748b', fontSize: 12 }}>
-                    {p.qty} shares @ ${p.entry_price}
-                  </span>
-                  {asset && (
-                    <span style={{ marginLeft: 8 }}>
-                      {getSetupBadge(asset.setup_type)}
+                  marginBottom: detail ? 10 : 0,
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 700, marginRight: 8 }}>{p.symbol}</span>
+                    <span style={{ color: '#64748b', fontSize: 12 }}>
+                      {p.qty?.toFixed(4)} shares @ ${p.entry_price}
                     </span>
-                  )}
-                  {asset && (
-                    <span style={{ color: '#64748b', fontSize: 11, marginLeft: 6 }}>
-                      {asset.sector_code}
-                    </span>
-                  )}
-                  {/* Target, Stop Loss & Buy Time */}
-                  {(() => {
-                    const bracketOrder = alpacaData.orders?.find(o =>
-                      o.symbol === p.symbol && o.side === 'buy' && o.status === 'filled' && o.legs
-                    );
-                    const tp = bracketOrder?.legs?.find(l => l.type === 'limit' || l.limit_price);
-                    const sl = bracketOrder?.legs?.find(l => l.type === 'stop' || l.stop_price);
-                    const buyTime = bracketOrder?.created_at;
-                    return (
-                      <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
-                        {tp && (
-                          <span style={{ fontSize: 10, color: '#22c55e', background: '#22c55e15', padding: '1px 6px', borderRadius: 4 }}>
-                            🎯 TP ${tp.limit_price}
-                          </span>
-                        )}
-                        {sl && (
-                          <span style={{ fontSize: 10, color: '#ef4444', background: '#ef444415', padding: '1px 6px', borderRadius: 4 }}>
-                            🛑 SL ${sl.stop_price}
-                          </span>
-                        )}
-                        {buyTime && (
-                          <span style={{ fontSize: 10, color: '#64748b' }}>
-                            🕐 {new Date(buyTime).toLocaleString()}
-                          </span>
-                        )}
+                    {asset && (
+                      <span style={{ marginLeft: 8 }}>
+                        {getSetupBadge(asset.setup_type)}
+                      </span>
+                    )}
+                    {(detail?.sector || asset?.sector_code) && (
+                      <span style={{ color: '#64748b', fontSize: 11, marginLeft: 6 }}>
+                        {detail?.sector || asset.sector_code}
+                      </span>
+                    )}
+                    {detail?.days_held > 0 && (
+                      <span style={{
+                        color: '#3b82f6',
+                        fontSize: 10,
+                        marginLeft: 8,
+                        background: '#3b82f620',
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                        fontWeight: 600,
+                      }}>
+                        {detail.days_held}d held
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 600 }}>${p.current_price}</div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: p.pnl_pct >= 0 ? '#22c55e' : '#ef4444',
+                        }}
+                      >
+                        {p.pnl_pct >= 0 ? '+' : ''}
+                        {p.pnl_pct?.toFixed(2)}% (${p.pnl?.toFixed(2)})
                       </div>
-                    );
-                  })()}
-                </div>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 600 }}>${p.current_price}</div>
-                    <div
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alpacaClose(p.symbol);
+                      }}
                       style={{
-                        fontSize: 12,
-                        color: p.pnl_pct >= 0 ? '#22c55e' : '#ef4444',
+                        padding: '4px 8px',
+                        borderRadius: 4,
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 11,
                       }}
                     >
-                      {p.pnl_pct >= 0 ? '+' : ''}
-                      {p.pnl_pct?.toFixed(2)}% (${p.pnl?.toFixed(2)})
-                    </div>
+                      Close
+                    </button>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      alpacaClose(p.symbol);
-                    }}
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: 4,
-                      background: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: 11,
-                    }}
-                  >
-                    Close
-                  </button>
                 </div>
+
+                {/* 🆕 v3.4 — Bottom row: Software SL/TP dal DB */}
+                {detail && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                    gap: 8,
+                    padding: '10px 12px',
+                    background: '#1e293b',
+                    borderRadius: 6,
+                    borderLeft: '3px solid #3b82f6',
+                  }}>
+                    {/* Stop Loss */}
+                    <div>
+                      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {'\uD83D\uDED1'} Stop Loss
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
+                        ${detail.stop_loss?.toFixed(2)}
+                      </div>
+                      <div style={{
+                        fontSize: 10,
+                        color: getDistanceColor(detail.stop_distance_pct, false),
+                        fontWeight: 600,
+                      }}>
+                        {detail.stop_distance_pct >= 0 ? '+' : ''}{detail.stop_distance_pct?.toFixed(2)}%
+                      </div>
+                    </div>
+
+                    {/* Take Profit */}
+                    <div>
+                      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {'\uD83C\uDFAF'} Take Profit
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
+                        ${detail.target?.toFixed(2)}
+                      </div>
+                      <div style={{
+                        fontSize: 10,
+                        color: getDistanceColor(detail.target_distance_pct, true),
+                        fontWeight: 600,
+                      }}>
+                        {detail.target_distance_pct >= 0 ? '+' : ''}{detail.target_distance_pct?.toFixed(2)}%
+                      </div>
+                    </div>
+
+                    {/* Risk/Reward */}
+                    <div>
+                      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {'\u2696\uFE0F'} R/R Ratio
+                      </div>
+                      <div style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: detail.risk_reward >= 2 ? '#22c55e' : detail.risk_reward >= 1 ? '#eab308' : '#ef4444',
+                      }}>
+                        {detail.risk_reward?.toFixed(2)}:1
+                      </div>
+                      <div style={{ fontSize: 10, color: '#64748b' }}>
+                        {detail.risk_reward >= 2 ? 'Excellent' : detail.risk_reward >= 1 ? 'Good' : 'Weak'}
+                      </div>
+                    </div>
+
+                    {/* Trailing Stop indicator */}
+                    {detail.trailing_stop && (
+                      <div>
+                        <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {'\uD83D\uDCC8'} Trailing
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#22c55e' }}>
+                          ${detail.trailing_stop?.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#22c55e' }}>
+                          Active
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confluence */}
+                    {detail.confluence > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {'\uD83D\uDCCA'} Confluence
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
+                          {detail.confluence?.toFixed(1)}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#64748b' }}>
+                          {detail.setup_type}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -536,7 +673,9 @@ export default function Alpaca({
                       {o.side?.toUpperCase()}
                     </span>{' '}
                     <span style={{ fontWeight: 600 }}>{o.symbol}</span>{' '}
-                    <span style={{ color: '#64748b' }}>x{o.qty}</span>
+                    <span style={{ color: '#64748b' }}>
+                      {o.notional ? `$${o.notional}` : `x${o.qty}`}
+                    </span>
                     {(o.filled_avg_price || o.limit_price) && (
                       <span style={{ color: '#94a3b8', marginLeft: 6 }}>
                         @ ${o.filled_avg_price || o.limit_price}
@@ -580,7 +719,7 @@ export default function Alpaca({
                   </div>
                 </div>
 
-                {/* Bracket Legs */}
+                {/* Bracket Legs (retrocompat) */}
                 {o.legs &&
                   o.legs.map((leg, li) => {
                     const lsc = getStatusColor(leg.status);
@@ -588,11 +727,7 @@ export default function Alpaca({
                       leg.type === 'limit' ||
                       leg.order_class === 'take_profit' ||
                       leg.limit_price;
-                    const isSL =
-                      leg.type === 'stop' ||
-                      leg.order_class === 'stop_loss' ||
-                      leg.stop_price;
-                    const label = isTP && !isSL ? 'TP' : 'SL';
+                    const label = isTP ? 'TP' : 'SL';
                     const labelColor = label === 'TP' ? '#22c55e' : '#ef4444';
                     const price =
                       leg.limit_price || leg.stop_price || leg.filled_avg_price || '—';
