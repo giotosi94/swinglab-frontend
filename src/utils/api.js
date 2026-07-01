@@ -32,6 +32,10 @@ export const fetchAlpaca = () => get('/api/data/alpaca');
 export const fetchTrader = () => get('/api/data/autotrader');
 export const fetchBenchmark = (period) => get(`/api/data/benchmark/spy?period=${period}`);
 export const fetchNews = (ticker) => get(`/api/data/news/${ticker}`);
+// 🆕 v2.2 — Starting capital from Alpaca portfolio history (single source of truth)
+export const fetchStartingCapital = () => get('/api/data/starting-capital');
+// 🆕 v3.4 — Positions with SL/TP details from DB (per fractional shares)
+export const fetchPositionsDetail = () => get('/api/debug/positions-detail');
 
 // ---------- Alpaca Actions ----------
 export const alpacaBuy = (symbol, qty) => post(`/api/data/alpaca/buy?symbol=${symbol}&qty=${qty}`);
