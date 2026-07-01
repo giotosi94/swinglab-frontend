@@ -1,8 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { fetchStartingCapital } from '../utils/api';
 
 export default function Settings({
   settings, setSettings, saveSettings, settingsSaving, alpacaData,
 }) {
+  // 🆕 v2.2 — Starting capital preso da Alpaca (fonte di verità)
+  const [capitalData, setCapitalData] = useState(null);
+  const [capitalLoading, setCapitalLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadCapital() {
+      setCapitalLoading(true);
+      const data = await fetchStartingCapital();
+      setCapitalData(data);
+      setCapitalLoading(false);
+    }
+    loadCapital();
+    // Refresh ogni 60 secondi
+    const interval = setInterval(loadCapital, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const sliders = [
     { key: 'max_positions', label: 'Max Positions', min: 3, max: 10, step: 1, unit: '', desc: 'Quante posizioni aperte contemporaneamente' },
     { key: 'risk_pct_per_trade', label: 'Risk per Trade', min: 0.5, max: 5, step: 0.25, unit: '%', desc: '% del capitale rischiato per singolo trade' },
@@ -12,6 +30,13 @@ export default function Settings({
     { key: 'daily_loss_limit_pct', label: 'Daily Loss Limit', min: -10, max: -1, step: 0.5, unit: '%', desc: 'Smette di tradare se perde oltre questa %' },
     { key: 'weekly_loss_limit_pct', label: 'Weekly Loss Limit', min: -15, max: -2, step: 1, unit: '%', desc: 'Riduce esposizione oltre questa % settimanale' },
   ];
+
+  // Fallback ai valori Alpaca se capitalData non è ancora caricato
+  const startingCapital = capitalData?.starting_capital ?? 0;
+  const currentEquity = capitalData?.current_equity ?? (alpacaData?.equity ?? 0);
+  const totalPnl = capitalData?.total_pnl_dollar ?? 0;
+  const totalPnlPct = capitalData?.total_pnl_pct ?? 0;
+  const startingDate = capitalData?.starting_date ?? 'unknown';
 
   return (
     <div>
@@ -23,63 +48,120 @@ export default function Settings({
           gap: 16,
         }}
       >
-        {/* Starting Capital */}
+        {/* 🆕 v2.2 — Portfolio Overview (READONLY, sync con Alpaca) */}
         <div
           style={{
-            background: '#0f172a',
+            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
             borderRadius: 12,
-            padding: 16,
-            border: '1px solid #1e293b',
+            padding: 20,
+            border: '1px solid #334155',
             gridColumn: '1 / -1',
           }}
         >
-          <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>
-            {'\uD83D\uDCB0'} Starting Capital
-          </h3>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <span style={{ color: '#94a3b8', fontSize: 13 }}>$</span>
-            <input
-              type="number"
-              value={settings.starting_capital}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  starting_capital: parseFloat(e.target.value) || 0,
-                })
-              }
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 15 }}>
+              {'\uD83D\uDCB0'} Portfolio Overview
+            </h3>
+            <span
               style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #334155',
-                background: '#1e293b',
-                color: 'white',
-                fontSize: 16,
+                background: '#22c55e22',
+                color: '#22c55e',
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: 11,
                 fontWeight: 700,
-                width: 200,
+                border: '1px solid #22c55e44',
               }}
-            />
-            <span style={{ color: '#64748b', fontSize: 12 }}>
-              Capitale iniziale per calcolare P&L totale
+            >
+              {'\uD83D\uDD17'} Synced with Alpaca
             </span>
           </div>
-          {alpacaData && settings.starting_capital > 0 && (() => {
-            const t = alpacaData.equity - settings.starting_capital;
-            const p = (t / settings.starting_capital) * 100;
-            return (
-              <div style={{ marginTop: 10, fontSize: 14 }}>
-                <span style={{ color: '#94a3b8' }}>Total P&L: </span>
-                <span
-                  style={{
-                    color: t >= 0 ? '#22c55e' : '#ef4444',
-                    fontWeight: 700,
-                  }}
-                >
-                  {t >= 0 ? '+' : ''}${t.toFixed(2)} ({p >= 0 ? '+' : ''}
-                  {p.toFixed(2)}%)
-                </span>
+
+          {capitalLoading ? (
+            <div style={{ color: '#64748b', fontSize: 13 }}>Loading portfolio data...</div>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 16,
+              }}
+            >
+              {/* Starting Capital */}
+              <div>
+                <div style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                  Starting Capital
+                </div>
+                <div style={{ color: 'white', fontSize: 22, fontWeight: 700 }}>
+                  ${startingCapital.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
+                  Since {startingDate}
+                </div>
               </div>
-            );
-          })()}
+
+              {/* Current Equity */}
+              <div>
+                <div style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                  Current Equity
+                </div>
+                <div style={{ color: 'white', fontSize: 22, fontWeight: 700 }}>
+                  ${currentEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
+                  Live from Alpaca
+                </div>
+              </div>
+
+              {/* Total P&L $ */}
+              <div>
+                <div style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                  Total P&L
+                </div>
+                <div style={{ color: totalPnl >= 0 ? '#22c55e' : '#ef4444', fontSize: 22, fontWeight: 700 }}>
+                  {totalPnl >= 0 ? '+' : ''}${Math.abs(totalPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
+                  Realized + Unrealized
+                </div>
+              </div>
+
+              {/* Total P&L % */}
+              <div>
+                <div style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                  Return %
+                </div>
+                <div style={{ color: totalPnlPct >= 0 ? '#22c55e' : '#ef4444', fontSize: 22, fontWeight: 700 }}>
+                  {totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%
+                </div>
+                <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
+                  Since inception
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Info banner */}
+          <div
+            style={{
+              marginTop: 16,
+              padding: '10px 12px',
+              background: '#3b82f61a',
+              border: '1px solid #3b82f644',
+              borderRadius: 8,
+              fontSize: 12,
+              color: '#93c5fd',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <span>{'\u2139\uFE0F'}</span>
+            <span>
+              Il capitale iniziale viene sincronizzato automaticamente con la portfolio history di Alpaca.
+              Non è più modificabile manualmente.
+            </span>
+          </div>
         </div>
 
         {/* Slider Cards */}
