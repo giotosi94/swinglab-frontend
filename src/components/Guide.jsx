@@ -488,21 +488,85 @@ export default function Guide() {
 
       {/* ---- 11. Roadmap ---- */}
       <Section emoji="🚀" title="11. Roadmap Futura">
+        {/* Multi-User Feature Highlight */}
+        <div style={{
+          background: 'linear-gradient(135deg, #8b5cf620 0%, #3b82f620 100%)',
+          borderRadius: 10,
+          padding: 16,
+          marginBottom: 16,
+          border: '1px solid #8b5cf644',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{ fontSize: 24 }}>👥</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'white' }}>Multi-User Platform (v4.0)</div>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>SwingLab as a Service — Coming Q3 2026</div>
+            </div>
+            <span style={{
+              marginLeft: 'auto',
+              background: '#8b5cf6',
+              color: 'white',
+              padding: '4px 10px',
+              borderRadius: 6,
+              fontSize: 10,
+              fontWeight: 700,
+            }}>
+              IN ROADMAP
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.7, marginTop: 8 }}>
+            Trasformazione di SwingLab in una <strong style={{ color: 'white' }}>piattaforma multi-tenant</strong> dove
+            ogni utente ha il suo <strong style={{ color: '#22c55e' }}>account Alpaca personale</strong>,
+            portfolio isolato, settings customizzati, e trade history separata.
+            Universe di stock e modelli ML condivisi per efficienza. Ideale per team, family accounts,
+            o portfolio manager che gestiscono più conti.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginTop: 12 }}>
+            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
+              <div style={{ color: '#22c55e', fontWeight: 700 }}>🔐 Auth</div>
+              <div style={{ color: '#94a3b8' }}>Email + Password / OAuth</div>
+            </div>
+            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
+              <div style={{ color: '#3b82f6', fontWeight: 700 }}>🔑 Alpaca Keys</div>
+              <div style={{ color: '#94a3b8' }}>AES-256 encrypted per user</div>
+            </div>
+            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
+              <div style={{ color: '#eab308', fontWeight: 700 }}>📊 Data Isolation</div>
+              <div style={{ color: '#94a3b8' }}>user_id in ogni collection</div>
+            </div>
+            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
+              <div style={{ color: '#f97316', fontWeight: 700 }}>⚡ Multi-Pipeline</div>
+              <div style={{ color: '#94a3b8' }}>Queue job per user</div>
+            </div>
+            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
+              <div style={{ color: '#8b5cf6', fontWeight: 700 }}>👨‍💼 Admin Panel</div>
+              <div style={{ color: '#94a3b8' }}>Monitoring & analytics</div>
+            </div>
+            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
+              <div style={{ color: '#06b6d4', fontWeight: 700 }}>💬 Team Features</div>
+              <div style={{ color: '#94a3b8' }}>Shared watchlist, chat</div>
+            </div>
+          </div>
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
           <Card title="🎯 Short Term (1 mese)" color="#22c55e">
             <strong>ML Retrain</strong>: aumentare accuracy WIN/LOSS al 55%+.
             <br/><strong>VXX Indicator</strong>: volatilità estrema.
             <br/><strong>Extended Hours</strong>: trading 10:00-02:00 CET.
+            <br/><strong>Auth System</strong>: base authentication JWT (prep multi-user).
           </Card>
           <Card title="🎯 Medium Term (3 mesi)" color="#eab308">
-            <strong>Multi-Broker</strong>: supporto IB, Robinhood.
+            <strong>Multi-User v4.0</strong>: piattaforma multi-tenant completa.
+            <br/><strong>Multi-Broker</strong>: supporto IB, Robinhood.
             <br/><strong>Options Trading</strong>: strategie coperte.
             <br/><strong>Backtesting Engine</strong>: test strategie storiche.
           </Card>
           <Card title="🎯 Long Term (6-12 mesi)" color="#8b5cf6">
             <strong>Reinforcement Learning</strong>: Executor RL-based.
             <br/><strong>Social Sentiment</strong>: Twitter/Reddit analysis.
-            <br/><strong>Custom Universe</strong>: stock list personalizzabile.
+            <br/><strong>Custom Universe</strong>: stock list personalizzabile per user.
+            <br/><strong>Mobile App</strong>: iOS + Android nativa.
           </Card>
         </div>
       </Section>
