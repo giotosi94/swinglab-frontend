@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import { getSetupBadge } from '../utils/helpers';
 import { fetchBenchmark, fetchPositionsDetail } from '../utils/api';
+import ApmActions from './ApmActions';
 
 export default function Alpaca({
   alpacaData, equityPeriods, selectedPeriod, setSelectedPeriod,
@@ -378,6 +379,9 @@ export default function Alpaca({
         </div>
       )}
 
+      {/* ===== 🆕 v4.0 — APM Actions Widget ===== */}
+      <ApmActions />
+      
       {/* ===== Portfolio Summary ===== */}
       {alpacaData.positions?.length > 0 && (
         <div style={{
