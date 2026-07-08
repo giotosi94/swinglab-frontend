@@ -72,6 +72,10 @@ export const fetchAgentsStatus = () => get('/api/agents/status');
 export const fetchAgentDecisions = (name, limit = 20) => get(`/api/agents/${name}/decisions?limit=${limit}`);
 export const runPipeline = () => post('/api/agents/run');
 export const runLearning = () => post('/api/agents/learn');
+// 🆕 v4.0 — APM (Adaptive Position Manager)
+export const fetchApmHistory = (limit = 30) => get(`/api/agents/apm-history?limit=${limit}`);
+export const fetchApmStatus = () => get('/api/agents/apm/status');
+export const fetchApmSummary = (days = 7) => get(`/api/agents/apm/summary?days=${days}`);
 
 // ---------- Settings ----------
 export const fetchSettings = () => get('/api/settings');
