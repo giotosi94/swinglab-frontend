@@ -39,48 +39,50 @@ export default function Guide() {
         marginBottom: 24,
         border: '1px solid #334155',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 32 }}>📖</span>
           <h2 style={{ margin: 0, fontSize: 24 }}>SwingLab — How It Works</h2>
           <span style={{
-            background: '#3b82f620',
-            color: '#3b82f6',
+            background: '#8b5cf620',
+            color: '#8b5cf6',
             padding: '4px 10px',
             borderRadius: 6,
             fontSize: 12,
             fontWeight: 700,
-            border: '1px solid #3b82f644',
+            border: '1px solid #8b5cf644',
           }}>
-            v3.6
+            v4.0 with APM
           </span>
         </div>
         <p style={{ color: '#94a3b8', fontSize: 14, lineHeight: 1.7, margin: '12px 0' }}>
-          <strong style={{ color: 'white' }}>SwingLab</strong> è una piattaforma di <strong style={{ color: '#3b82f6' }}>swing trading algoritmico</strong> con
-          architettura <strong style={{ color: '#22c55e' }}>Multi-Agent AI</strong>. Combina 4 agenti autonomi coordinati da uno Shared Brain,
+          <strong style={{ color: 'white' }}>SwingLab v4.0</strong> è una piattaforma di <strong style={{ color: '#3b82f6' }}>swing trading algoritmico</strong> con
+          architettura <strong style={{ color: '#22c55e' }}>Multi-Agent AI a 5 agenti</strong>. Combina agenti autonomi coordinati da uno Shared Brain,
           modelli Machine Learning (XGBoost + Trend Predictor), analisi tecnica multi-fattore (15 indicatori),
-          LLM reasoning in italiano (Gemini + Groq), news sentiment analysis, ed esegue trade automatici via
-          Alpaca Paper Trading con protezione software SL/TP integrata.
+          LLM reasoning in italiano (Gemini + Groq), news sentiment analysis, e — novità v4.0 — l'
+          <strong style={{ color: '#8b5cf6' }}> Adaptive Position Manager (APM)</strong> che rivaluta ogni 3h le posizioni aperte
+          decidendo dinamicamente HOLD, SCALE OUT, EXIT o TIGHTEN STOP con reasoning italiano.
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-          <span style={{ background: '#22c55e20', color: '#22c55e', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ Multi-Agent AI</span>
+          <span style={{ background: '#22c55e20', color: '#22c55e', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ 5 Multi-Agent AI</span>
+          <span style={{ background: '#8b5cf620', color: '#8b5cf6', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ APM Adaptive</span>
           <span style={{ background: '#3b82f620', color: '#3b82f6', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ ML Integration</span>
           <span style={{ background: '#eab30820', color: '#eab308', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ LLM Reasoning</span>
           <span style={{ background: '#f9731620', color: '#f97316', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ Software SL/TP</span>
-          <span style={{ background: '#8b5cf620', color: '#8b5cf6', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ 24/7 Automation</span>
-          <span style={{ background: '#06b6d420', color: '#06b6d4', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ Fractional Trading</span>
+          <span style={{ background: '#06b6d420', color: '#06b6d4', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ 24/7 Automation</span>
+          <span style={{ background: '#84cc1620', color: '#84cc16', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✓ Fractional Trading</span>
         </div>
       </div>
 
       {/* ---- 0. Key Metrics ---- */}
-      <Section emoji="📊" title="0. Sistema in Numeri">
+      <Section emoji="📊" title="0. Sistema in Numeri (v4.0)">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-          <Metric label="Universo Stock" value="220" color="#3b82f6" />
+          <Metric label="Universo Stock" value="226" color="#3b82f6" />
           <Metric label="Settori SPDR" value="11" color="#22c55e" />
           <Metric label="Macro Indicators" value="19" color="#eab308" />
           <Metric label="Fattori Confluence" value="15" color="#f97316" />
-          <Metric label="Agenti AI" value="4" color="#8b5cf6" />
+          <Metric label="Agenti AI" value="5" color="#8b5cf6" />
           <Metric label="ML Models" value="2" color="#ef4444" />
-          <Metric label="LLM Providers" value="2" color="#06b6d4" />
+          <Metric label="LLM Providers" value="3" color="#06b6d4" />
           <Metric label="Uptime" value="24/7" color="#22c55e" />
         </div>
       </Section>
@@ -88,31 +90,26 @@ export default function Guide() {
       {/* ---- 1. Data Sources ---- */}
       <Section emoji="📡" title="1. Data Sources & Universo di Trading">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
-          <Card title="📈 220 Stock S&P" color="#3b82f6">
-            20 stock per ognuno degli 11 settori SPDR. Dati OHLCV storici da Alpaca IEX,
-            prezzi real-time da Twelve Data (800 chiamate/giorno).
+          <Card title="📈 226 Stock S&P" color="#3b82f6">
+            20 stock per ognuno degli 11 settori SPDR + assets extra. Dati OHLCV storici da Alpaca IEX,
+            prezzi real-time da Twelve Data.
           </Card>
           <Card title="🏛 11 Settori SPDR" color="#22c55e">
             XLK (Tech), XLF (Financials), XLV (Health), XLI (Industrials), XLY (Discretionary),
             XLP (Staples), XLE (Energy), XLU (Utilities), XLB (Materials), XLRE (Real Estate), XLC (Communications).
-            Ranking dinamico per composite score.
           </Card>
           <Card title="🌍 10 Macro ETF" color="#eab308">
-            <strong>Bonds</strong>: TLT, HYG, LQD | <strong>Commodities</strong>: GLD, USO |
-            <strong> Breadth</strong>: RSP, IWO | <strong>Volatilità</strong>: VIXY, VXX |
-            <strong> Emerging</strong>: EEM | <strong>Transport</strong>: IYT
+            Bonds: TLT, HYG, LQD | Commodities: GLD, USO | Breadth: RSP, IWO | Volatilità: VIXY, VXX |
+            Emerging: EEM | Transport: IYT
           </Card>
           <Card title="🪙 Crypto & FX" color="#f97316">
-            BTC/USD, ETH/USD (crypto sentiment risk-on/off), FXE (Euro),
-            UUP (Dollar strength). Real-time da Alpaca.
+            BTC/USD, ETH/USD (crypto sentiment risk-on/off), FXE (Euro), UUP (Dollar strength).
           </Card>
           <Card title="📰 News & Sentiment" color="#06b6d4">
-            Alpaca News API fornisce headlines per ogni stock. LLM (Gemini/Groq) analizza sentiment
-            (POSITIVO/NEUTRO/NEGATIVO) ed earnings imminenti.
+            Alpaca News API + LLM (Gemini/Groq) per sentiment analysis ed earnings detection.
           </Card>
           <Card title="💰 Alpaca Paper Trading" color="#8b5cf6">
-            Broker per esecuzione trade in modalità paper (soldi finti, dati reali). Supporta fractional shares
-            (comprare $100 invece che 1 share). Portfolio history dal giorno 1.
+            Broker paper trading con supporto fractional shares, portfolio history, real-time quotes IEX.
           </Card>
         </div>
       </Section>
@@ -121,36 +118,28 @@ export default function Guide() {
       <Section emoji="📊" title="2. Analisi Tecnica Multi-Fattore">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
           <Card title="RSI (14)" color="#3b82f6">
-            0-30 = Oversold | 30-70 = Normale | 70-100 = Overbought.
-            Sweet spot per entry: <strong>40-60</strong>. Reversal opportunity: 30-40.
+            Sweet spot per entry: 40-60. Reversal opportunity: 30-40.
           </Card>
           <Card title="MACD" color="#22c55e">
-            Histogram {'>'} 0 = momentum positivo. Crossover linea segnale =
-            buy/sell signal. Visualizzato come istogramma sul chart.
+            Histogram &gt; 0 = momentum positivo. Crossover linea segnale = buy/sell signal.
           </Card>
           <Card title="EMA (10/20/50)" color="#eab308">
-            <strong>Full Align</strong>: Price {'>'} EMA10 {'>'} EMA20 {'>'} EMA50 = uptrend perfetto.
-            <strong>Partial</strong>: Price {'>'} EMA20 {'>'} EMA50 = trend valido ma non ottimale.
+            Full Align: Price &gt; EMA10 &gt; EMA20 &gt; EMA50 = uptrend perfetto.
           </Card>
           <Card title="Volume Profile (POC + VA)" color="#f97316">
-            <strong>POC</strong>: Point of Control (prezzo più tradato) = supporto/resistenza forte.
-            <strong>VA High/Low</strong>: Value Area = zona del 70% del volume. Target/Stop ibridi.
+            POC (Point of Control), VA High/Low (Value Area 70%). Target/Stop ibridi.
           </Card>
           <Card title="Wyckoff Phases" color="#8b5cf6">
-            <strong>Accumulation → Markup → Distribution → Markdown</strong>.
-            Signal: <strong>Spring</strong> (rimbalzo forte da supporto) = strong_bullish (+2.0 punti confluence).
+            Accumulation → Markup → Distribution → Markdown. Spring = strong bullish signal (+2.0 punti).
           </Card>
           <Card title="Candlestick & FVG" color="#ef4444">
-            Pattern: Hammer, Engulfing, Doji, Morning/Evening Star, Piercing Line.
-            <strong>FVG (Fair Value Gap)</strong>: gap non riempiti dove il prezzo tende a tornare.
+            Pattern: Hammer, Engulfing, Doji, Morning/Evening Star. Fair Value Gap non riempiti.
           </Card>
           <Card title="Accumulation Score" color="#06b6d4">
-            Punteggio 0-100 che rileva accumulo istituzionale in base a volume + price action.
-            {'>'} 70 = strong accumulation, {'>'} 40 = moderate.
+            Punteggio 0-100 accumulo istituzionale in base a volume + price action.
           </Card>
           <Card title="Range Position 52W" color="#84cc16">
-            Posizione del prezzo attuale rispetto al range 52 settimane.
-            {'<'} 30% = value zone, {'>'} 70% = near high (momentum).
+            &lt; 30% = value zone, &gt; 70% = near high (momentum).
           </Card>
         </div>
       </Section>
@@ -161,8 +150,7 @@ export default function Guide() {
           <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7 }}>
             L'AlphaStrategist calcola per ogni stock un <strong style={{ color: '#22c55e' }}>Confluence Score</strong> (0-100)
             basato su <strong>15 fattori pesati</strong>. Solo i candidati sopra la soglia minima (default 35) diventano
-            buy opportunity. I fattori sono divisi in <strong style={{ color: '#3b82f6' }}>13 Rule-Based</strong> e
-            <strong style={{ color: '#8b5cf6' }}> 2 ML-Powered</strong>.
+            buy opportunity. 13 Rule-Based + 2 ML-Powered.
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
@@ -198,186 +186,162 @@ export default function Guide() {
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 12, padding: 12, background: '#0f172a', borderRadius: 8, fontSize: 11, color: '#64748b' }}>
-          <strong style={{ color: '#94a3b8' }}>Max Raw Score:</strong> 19.5 punti → normalizzato a 0-100.
-          Sistema di pesi <strong>configurabili e adattivi</strong> tramite learning loop:
-          fattori che portano più profit vengono premiati nel tempo.
-        </div>
       </Section>
 
-      {/* ---- 4. I 4 Agenti AI ---- */}
-      <Section emoji="🤖" title="4. Architettura Multi-Agent AI">
+      {/* ---- 4. Architettura Multi-Agent v4.0 ---- */}
+      <Section emoji="🤖" title="4. Architettura Multi-Agent AI v4.0 (5 Agenti)">
         <div style={{ background: '#1e293b', borderRadius: 10, padding: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12, textAlign: 'center', lineHeight: 1.7 }}>
-            4 agenti AI <strong style={{ color: '#3b82f6' }}>indipendenti e autonomi</strong> operano in pipeline sequenziale,
+            <strong style={{ color: '#8b5cf6' }}>5 agenti AI indipendenti</strong> operano in pipeline sequenziale,
             comunicano tramite <strong style={{ color: '#8b5cf6' }}>Shared Brain (MongoDB)</strong>,
-            e <strong style={{ color: '#22c55e' }}>leggono il reasoning degli altri</strong> per decisioni contestuali.
+            e leggono il reasoning degli altri per decisioni contestuali.
           </div>
 
           {/* Visual Flow */}
           <div style={{ background: '#0f172a', borderRadius: 8, padding: 16, marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
-              {Object.entries(AGENT_INFO).map(([name, info], i) => (
-                <React.Fragment key={name}>
-                  {i > 0 && <div style={{ color: '#475569', fontSize: 20 }}>→</div>}
-                  <div style={{ background: '#1e293b', borderRadius: 10, padding: '10px 14px', border: `2px solid ${info.color}`, textAlign: 'center', minWidth: 110 }}>
-                    <div style={{ fontSize: 18 }}>{info.emoji}</div>
-                    <div style={{ color: 'white', fontSize: 11, fontWeight: 700, marginTop: 2 }}>{info.name}</div>
-                  </div>
-                </React.Fragment>
-              ))}
+              {['macro_analyst', 'alpha_strategist', 'risk_manager', 'adaptive_position_manager', 'executor'].map((name, i) => {
+                const info = AGENT_INFO[name];
+                if (!info) return null;
+                return (
+                  <React.Fragment key={name}>
+                    {i > 0 && <div style={{ color: '#475569', fontSize: 20 }}>→</div>}
+                    <div style={{ background: '#1e293b', borderRadius: 10, padding: '10px 14px', border: `2px solid ${info.color}`, textAlign: 'center', minWidth: 100 }}>
+                      <div style={{ fontSize: 18 }}>{info.emoji}</div>
+                      <div style={{ color: 'white', fontSize: 10, fontWeight: 700, marginTop: 2 }}>{info.name}</div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
             <div style={{ textAlign: 'center', padding: '8px 0', borderTop: '1px solid #334155', borderBottom: '1px solid #334155', margin: '8px 0' }}>
               <span style={{ color: '#8b5cf6', fontWeight: 700, fontSize: 12 }}>🧠 Shared Brain (MongoDB)</span>
               <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
-                market state · candidates · approved trades · executions · LLM reasoning
+                market state · candidates · approved trades · APM decisions · executions · LLM reasoning
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-              <span style={{ background: '#3b82f620', padding: '3px 8px', borderRadius: 4, fontSize: 9, color: '#3b82f6' }}>🌍 Market Analysis</span>
-              <span style={{ background: '#22c55e20', padding: '3px 8px', borderRadius: 4, fontSize: 9, color: '#22c55e' }}>🎯 Stock Selection</span>
-              <span style={{ background: '#eab30820', padding: '3px 8px', borderRadius: 4, fontSize: 9, color: '#eab308' }}>🛡 Risk Management</span>
-              <span style={{ background: '#f9731620', padding: '3px 8px', borderRadius: 4, fontSize: 9, color: '#f97316' }}>⚡ Order Execution</span>
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 12, fontSize: 10, color: '#64748b' }}>
-              Pipeline eseguita <strong style={{ color: '#22c55e' }}>ogni 15 minuti</strong> tramite cron-job.org
-              durante ore di mercato USA (15:30-22:00 CEST)
-            </div>
-          </div>
-
-          {/* Communication Chain */}
-          <div style={{ background: '#0f172a', borderRadius: 8, padding: 12 }}>
-            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 8 }}>🔗 Catena di Comunicazione (Esempi Reali)</div>
-            {[
-              { from: '🌍 Macro', to: '🎯 Alpha', msg: '"Regime NEUTRAL, rotation offensive, breadth 57%: focus su sector top rank"', color: '#3b82f6' },
-              { from: '🎯 Alpha', to: '🛡 Risk', msg: '"Top pick TFC: confluence 66, ML WIN 89%, ma earnings imminenti"', color: '#22c55e' },
-              { from: '🌍+🎯', to: '🛡 Risk', msg: '"Macro neutro + Alpha selettivo → riduce sizing al 12% per posizione"', color: '#eab308' },
-              { from: '🌍+🛡', to: '⚡ Executor', msg: '"5 trade approvati con R/R medio 2.3, procedi con notional buy"', color: '#f97316' },
-            ].map((flow, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 10, flexWrap: 'wrap' }}>
-                <span style={{ color: flow.color, fontWeight: 700, minWidth: 100 }}>{flow.from} → {flow.to}</span>
-                <span style={{ color: '#64748b', fontStyle: 'italic', flex: 1 }}>{flow.msg}</span>
-              </div>
-            ))}
           </div>
         </div>
 
         {/* Agent Detail Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
           <Card title="🌍 MacroAnalyst" color="#3b82f6">
-            Analizza <strong>19 indicatori macro</strong>: indici (SPY/QQQ/IWM/DIA), volatilità (VIXY),
-            bonds & credit (TLT/HYG/LQD), commodities (GLD/USO), breadth (RSP), crypto, dollar strength,
-            risk appetite (IWO/EEM/IYT). Determina regime (BULL/NEUTRAL/BEAR/CRASH), exposure multiplier,
-            rotation signal. LLM Reasoning in italiano.
+            Analizza 19 indicatori macro. Determina regime (BULL/NEUTRAL/BEAR/CRASH), exposure multiplier,
+            rotation signal. LLM Reasoning in italiano letto da tutti gli altri agenti.
           </Card>
           <Card title="🎯 AlphaStrategist v2.0" color="#22c55e">
-            Scansiona 220 stock e applica <strong>Confluence Score 15 fattori</strong> (13 rule-based + 2 ML).
-            Filtra per RSI, volume smart, setup type, sector limit. Legge Macro reasoning + fetcha news + earnings.
-            LLM analizza top 5 candidati con analisi dettagliata pro/contro. Target/Stop safety con validation.
+            Confluence Score 15 fattori (13 rules + 2 ML). Filtra per RSI, volume smart, setup type,
+            sector limit. LLM analizza top 5 candidati con pro/contro.
           </Card>
           <Card title="🛡 RiskManager" color="#eab308">
-            Approva/rifiuta trade in base a: R/R ratio ({'>'}1.5:1), max positions, max per sector,
-            daily/weekly loss limits, cash reserve. Calcola <strong>notional sizing</strong> (12% per posizione)
-            considerando exposure attuale. Legge Macro + Alpha reasoning per decisioni contestuali.
+            Approva/rifiuta trade in base a R/R ratio, max positions, sector limits, cash reserve.
+            Calcola notional sizing (12% per posizione).
+          </Card>
+          <Card title="🎯 APM v1.0 (NEW!)" color="#8b5cf6">
+            <strong>Novità v4.0</strong>. Rivaluta le posizioni aperte ogni 3h. Decide:
+            <br/>• 🟢 <strong>HOLD</strong> — tesi valida
+            <br/>• 🟡 <strong>SCALE_OUT</strong> — chiudi parziale al target
+            <br/>• 🔴 <strong>EXIT</strong> — tesi rotta, esci subito
+            <br/>• 🛡️ <strong>TIGHTEN_STOP</strong> — proteggi profit
+            <br/>LLM reasoning italiano per ogni decisione.
           </Card>
           <Card title="⚡ Executor v3.4" color="#f97316">
-            Esegue trade via <strong>notional buy (fractional shares)</strong> con recalc post-fill
-            se slippage {'>'} 3%. Gestisce <strong>Software SL/TP</strong> (Alpaca non supporta bracket + fractional),
-            trailing stops a 3 livelli (break-even/+4%/+8%), Trade Sync v4 per posizioni chiuse,
-            cancella ordini stale senza toccare SL/TP.
+            Notional buy (fractional shares) + recalc post-fill se slippage &gt; 3%.
+            Software SL/TP (Alpaca non supporta bracket+fractional), trailing 3 livelli, Trade Sync v5.
           </Card>
         </div>
       </Section>
 
-      {/* ---- 5. ML Integration ---- */}
-      <Section emoji="🧠" title="5. Machine Learning Integration">
-        <div style={{ background: '#1e293b', borderRadius: 10, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7 }}>
-            SwingLab integra <strong style={{ color: '#8b5cf6' }}>2 modelli ML</strong> nei processi decisionali
-            dell'AlphaStrategist. Le predizioni sono <strong>on-the-fly</strong> (calcolate ad ogni run) e
-            direttamente incorporate nel Confluence Score. I pesi ML sono <strong>conservativi</strong>
-            per compensare la relativa novità dei modelli.
+      {/* ---- 5. APM Deep Dive ---- */}
+      <Section emoji="🎯" title="5. APM — Adaptive Position Manager (v4.0 novità)">
+        <div style={{ background: 'linear-gradient(135deg, #1e1b3a 0%, #0f172a 100%)', borderRadius: 10, padding: 20, marginBottom: 14, border: '2px solid #8b5cf6' }}>
+          <div style={{ fontSize: 13, color: 'white', lineHeight: 1.7 }}>
+            <strong style={{ color: '#8b5cf6', fontSize: 15 }}>🎯 La rivoluzione di v4.0</strong>
+            <br/><br/>
+            Prima di APM, il sistema comprava con target/stop fissi e aspettava passivamente.
+            Ora l'APM <strong>rivaluta ogni 3h</strong> ogni posizione confrontando le condizioni attuali con quelle originali:
+            <br/><br/>
+            <strong style={{ color: '#8b5cf6' }}>Se la tesi è ancora valida</strong> → HOLD (mantiene)
+            <br/>
+            <strong style={{ color: '#8b5cf6' }}>Se il profit è alto ma il momentum cala</strong> → SCALE_OUT (chiude parziale) o TIGHTEN_STOP (protegge)
+            <br/>
+            <strong style={{ color: '#8b5cf6' }}>Se la tesi è rotta</strong> → EXIT immediato (non aspetta il SL)
+            <br/><br/>
+            Ogni decisione ha <strong>LLM reasoning italiano</strong> e viene salvata per learning futuro.
           </div>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+          <Card title="🟢 HOLD" color="#22c55e">
+            <strong>Condizione</strong>: Confluence originale ancora &gt; 50, ML predice ancora WIN, nessuna news negativa.
+            <br/><strong>Azione</strong>: Mantiene posizione, aspetta target o SL naturale.
+          </Card>
+          <Card title="🟡 SCALE_OUT" color="#eab308">
+            <strong>Condizione</strong>: Profit raggiunge target (5%, 10%, 20% configurabili).
+            <br/><strong>Azione</strong>: Chiude 50% al T1, 30% al T2, 20% al T3. Break-even sul resto.
+          </Card>
+          <Card title="🔴 EXIT" color="#ef4444">
+            <strong>Condizione</strong>: Confluence crolla sotto 30, ML predice DOWN forte, o 2+ fattori negativi.
+            <br/><strong>Azione</strong>: Chiude 100% posizione, non aspetta SL. Meglio piccola perdita che grossa.
+          </Card>
+          <Card title="🛡️ TIGHTEN_STOP" color="#f97316">
+            <strong>Condizione</strong>: Profit &gt; 3% ma ML predice inversione o volatilità aumenta.
+            <br/><strong>Azione</strong>: Alza SL vicino al current price per proteggere profit.
+          </Card>
+          <Card title="⏰ Frequency" color="#3b82f6">
+            <strong>Timer</strong>: 3 ore (configurabile 1-8h). Bilanciato per non essere nervoso.
+            <br/><strong>Urgent</strong>: Se drop &gt; 5% in 1h → check immediato (bypass timer).
+          </Card>
+          <Card title="🧠 Learning Loop (weekend prossimo)" color="#06b6d4">
+            <strong>FASE 3</strong>: Auto-tuning settimanale delle soglie basato su outcome delle decisioni passate.
+            Sistema che <strong>impara dai propri errori</strong>.
+          </Card>
+        </div>
+      </Section>
+
+      {/* ---- 6. ML Integration ---- */}
+      <Section emoji="🧠" title="6. Machine Learning Integration">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
           <Card title="🎲 XGBoost WIN/LOSS Classifier" color="#8b5cf6">
-            <strong>15 features</strong>: RSI, MACD hist, EMA distances, volume, POC distance,
-            accumulation score, Wyckoff signal, confluence pre-ML.
-            <br/><strong>Output</strong>: WIN/LOSS con score 0-100 e confidence.
-            <br/><strong>Contribuzione</strong>: fino a +2.5 punti al Confluence Score.
-            <br/><strong>Training</strong>: 300 samples base (in crescita con trade reali).
+            15 features (RSI, MACD, EMA, volume, POC, Wyckoff, accumulation, confluence).
+            Output: WIN/LOSS con score 0-100 e confidence. Contribuzione fino a +2.5 punti al Confluence Score.
+            Retrain automatico con nuovi trade chiusi.
           </Card>
           <Card title="📈 Trend Predictor 5D" color="#3b82f6">
-            <strong>20 features</strong> da price bars: range, returns, volatility, EMA alignments.
-            <br/><strong>Output</strong>: UP/FLAT/DOWN a 5 giorni con probabilità.
-            <br/><strong>Contribuzione</strong>: fino a +2.0 punti (UP forte), -1.5 (DOWN forte).
-            <br/><strong>Training</strong>: 13,680 samples da 249 stock. Accuracy 50.7%.
+            20 features da price bars: range, returns, volatility, EMA alignments.
+            Output: UP/FLAT/DOWN a 5 giorni con probabilità. Contribuzione fino a +2.0 punti (UP forte).
+            Training: 13,680 samples da 249 stock.
           </Card>
-          <Card title="🔄 Adaptive Learning Loop" color="#22c55e">
-            Ogni agente ha un metodo <strong>learn()</strong> che analizza trade passati (con time decay a 60 giorni)
-            e aggiorna i propri parametri: pesi fattori, soglie R/R, best/worst setups, weak sectors, min confluence.
-            Sistema evolutivo che migliora nel tempo.
+          <Card title="🔍 ML Health Check" color="#22c55e">
+            Endpoint /api/ml/debug/health per monitoring continuo.
+            Detect predizioni "flat", varianza troppo bassa, feature quality, training data quality.
           </Card>
-          <Card title="📊 ML Contribution Tracking" color="#eab308">
-            Ogni candidato mostra <strong>ml_contribution</strong> e <strong>rules_contribution</strong> separati.
-            Trasparenza totale su quanto ML abbia influenzato la decisione.
-            Permette test A/B pre/post ML integration.
+          <Card title="🔄 Adaptive Learning Loop" color="#eab308">
+            Ogni agente ha metodo learn() che analizza trade passati con time decay a 60 giorni.
+            Aggiorna parametri automaticamente.
           </Card>
         </div>
       </Section>
 
-      {/* ---- 6. LLM Reasoning ---- */}
-      <Section emoji="💬" title="6. LLM Reasoning (Gemini + Groq)">
-        <div style={{ background: '#1e293b', borderRadius: 10, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7 }}>
-            Ogni agente produce un <strong style={{ color: '#eab308' }}>reasoning in italiano</strong>
-            tramite LLM (Large Language Model). Non decide, ma <strong>spiega e contestualizza</strong>
-            le decisioni prese dalle regole. Sistema con <strong>fallback multi-provider</strong>
-            e cache intelligente per ottimizzare quote.
-          </div>
-        </div>
+      {/* ---- 7. LLM Reasoning ---- */}
+      <Section emoji="💬" title="7. LLM Reasoning (Gemini + Groq)">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
           <Card title="🥇 Provider Primario: Gemini 2.0 Flash" color="#4285f4">
-            Google Gemini API, veloce e preciso. Free tier: 1,500 requests/day. Usato per la maggior parte del reasoning.
+            Google Gemini API. Free tier 1,500 requests/day.
           </Card>
           <Card title="🥈 Provider Fallback: Groq (Llama 3)" color="#f97316">
-            Groq API con Llama 3 70B. Attivato automaticamente quando Gemini esaurisce quota.
-            Ultra-veloce (~200 tokens/sec).
+            Ultra-veloce (~200 tokens/sec). Attivato automaticamente quando Gemini esaurisce quota.
           </Card>
-          <Card title="💾 Cache & Cooldown" color="#22c55e">
-            Sistema cache per prompts simili + cooldown per agente (Macro 25min, Alpha 12min, Risk 12min, Executor 8min).
-            Riduce chiamate LLM di ~60%.
+          <Card title="🥉 Terzo Fallback: Cerebras" color="#22c55e">
+            Fallback ulteriore per garantire uptime LLM.
           </Card>
-          <Card title="🧠 Reasoning Cross-Agente" color="#8b5cf6">
-            Executor LLM legge reasoning di Macro e Risk dal Shared Brain per giustificare esecuzioni.
-            Alpha LLM legge Macro per contestualizzare stock analysis. AI multi-livello.
+          <Card title="💾 Cache & Cooldown Intelligente" color="#8b5cf6">
+            Sistema cache per ticker (evita analisi duplicate). Cooldown separato per agente e ticker.
           </Card>
-        </div>
-      </Section>
-
-      {/* ---- 7. Shared Brain ---- */}
-      <Section emoji="🧠" title="7. Shared Brain — Coordinamento Multi-Agent">
-        <Card title="MongoDB Collection Condivisa" color="#8b5cf6">
-          Il Shared Brain è un documento MongoDB unificato dove ogni agente scrive il suo output
-          e legge quello degli altri. Permette agli agenti di essere <strong>autonomi ma coordinati</strong>,
-          con reasoning LLM cross-agent accessibile a tutti.
-        </Card>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginTop: 10 }}>
-          <Card title="📍 market" color="#3b82f6">
-            <strong>Scritto da Macro</strong>. Contiene: regime, confidence, exposure multiplier, volatility,
-            breadth %, rotation signal, sector rankings, LLM reasoning italiano.
+          <Card title="🧠 Reasoning Cross-Agente" color="#06b6d4">
+            APM legge reasoning di Macro. Executor legge Macro + Risk + APM. AI multi-livello.
           </Card>
-          <Card title="🎯 candidates" color="#22c55e">
-            <strong>Scritto da Alpha</strong>. Buy candidates con: confluence (rules + ML),
-            target/stop safety-checked, ML predictions, LLM analysis per top 5.
-          </Card>
-          <Card title="✅ approved" color="#eab308">
-            <strong>Scritto da Risk</strong>. Trade approvati con: notional sizing,
-            R/R validation, sector distribution, risk report completo, LLM reasoning.
-          </Card>
-          <Card title="⚡ executions" color="#f97316">
-            <strong>Scritto da Executor</strong>. Ordini eseguiti con: fill price reale,
-            SL/TP finali, trailing stops attivi, Trade Sync v4, LLM reasoning esecutivo.
+          <Card title="🌐 Reasoning Italiano" color="#84cc16">
+            Ogni decisione ha spiegazione in italiano per trasparenza totale.
           </Card>
         </div>
       </Section>
@@ -385,35 +349,23 @@ export default function Guide() {
       {/* ---- 8. Order Execution ---- */}
       <Section emoji="📦" title="8. Order Execution & Risk Protection">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-          <Card title="💵 Notional Buy (Fractional Shares)" color="#3b82f6">
-            Compra in <strong>dollari</strong> invece che shares intere.
-            Esempio: $12,691 di V a $349.80 = <strong>36.23 shares frazionate</strong>.
-            Permette sizing preciso e diversificazione anche con capitali medi.
+          <Card title="💵 Notional Buy (Fractional)" color="#3b82f6">
+            Compra in dollari invece che shares intere. Sizing preciso e diversificazione.
           </Card>
           <Card title="🎯 3-Step Buy Flow" color="#22c55e">
-            <strong>1.</strong> place_notional_buy → <strong>2.</strong> wait_for_fill (polling 15s max)
-            → <strong>3.</strong> place SL + TP con qty reale del fill.
-            Se slippage {'>'} 3% → auto-recalc target/stop.
+            place_notional_buy → wait_for_fill → place SL + TP. Recalc se slippage &gt; 3%.
           </Card>
           <Card title="🛡️ Software SL/TP" color="#f97316">
-            Alpaca non supporta SL/TP con fractional shares. SwingLab gestisce
-            <strong> software-only</strong>: l'Executor controlla ogni run se prezzo attuale
-            supera SL o TP → chiude posizione. Latenza max 15 min (frequenza cron).
+            Alpaca non supporta SL/TP nativi con fractional. Executor gestisce software-only con controllo ogni run.
           </Card>
           <Card title="📈 Trailing Stops 3-Level" color="#8b5cf6">
-            <strong>L1</strong>: profit {'>'} +5% → stop a break-even.
-            <strong>L2</strong>: profit {'>'} +8% → stop a entry +4%.
-            <strong>L3</strong>: profit {'>'} +12% → stop a entry +8%.
-            Protezione dinamica del profit.
+            L1 profit &gt; +5% → break-even. L2 &gt; +8% → entry +4%. L3 &gt; +12% → entry +8%.
           </Card>
           <Card title="🧯 Sanity Checks Multi-Layer" color="#ef4444">
-            <strong>Layer 1</strong>: AlphaStrategist valida SL {'<'} entry, TP {'>'} entry.
-            <strong>Layer 2</strong>: Executor recalc post-fill se slippage rileva anomalia.
-            <strong>Layer 3</strong>: Software SL/TP skip trigger se SL/TP invalidi.
+            AlphaStrategist valida SL/TP. Executor recalc post-fill. Software SL/TP skip se invalidi.
           </Card>
-          <Card title="🔄 Trade Sync v4" color="#06b6d4">
-            Sincronizzazione automatica tra Alpaca (verità operativa) e MongoDB (verità analytics).
-            Rileva chiusure esterne, calcola P&L reale, link sell → buy tramite sell_linked flag.
+          <Card title="🔄 Trade Sync v5" color="#06b6d4">
+            Sincronizzazione automatica Alpaca ↔ MongoDB. Anti-mismatch fractional/integer.
           </Card>
         </div>
       </Section>
@@ -422,29 +374,22 @@ export default function Guide() {
       <Section emoji="📈" title="9. Analytics & Adaptive Learning">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
           <Card title="📊 Performance Analytics" color="#22c55e">
-            Sharpe, Sortino, Profit Factor, Expectancy, Max Drawdown, Win Rate, Monthly P&L,
-            Win Rate per Regime/Giorno/Settore/Setup, Streaks, Holding Period.
+            Sharpe, Sortino, Profit Factor, Expectancy, Max Drawdown, Win Rate, Monthly P&L.
           </Card>
           <Card title="📉 Benchmark vs SPY" color="#3b82f6">
-            Confronto equity SwingLab vs SPY su periodi selezionabili (1D/1W/1M/3M/6M/1Y/YTD).
-            Calcolo <strong>Alpha</strong> = extra return vs benchmark. Grafici professionali.
+            Confronto equity vs SPY su periodi selezionabili. Calcolo Alpha automatico.
           </Card>
           <Card title="🧬 Learning Loop" color="#8b5cf6">
-            Ogni agente ha <strong>learn()</strong> che analizza trade chiusi degli ultimi 30-90 giorni con time decay.
-            Aggiusta parametri: pesi fattori, best/worst setups, weak sectors, soglie R/R.
+            Ogni agente ha learn() che aggiusta parametri con time decay 60 giorni.
           </Card>
           <Card title="🎯 Decision Log" color="#eab308">
-            Ogni decisione di ogni agente è salvata in MongoDB con contesto completo,
-            reasoning, confidence, e outcome (aggiornato retroattivamente).
-            Base dati per retrain ML.
+            Ogni decisione salvata con contesto completo. Base dati per retrain ML.
           </Card>
           <Card title="🔔 Notifiche Telegram" color="#f97316">
-            Bot Telegram invia notifiche real-time per: buy/sell eseguiti,
-            trailing stop scattato, market crash detection, daily summary.
+            Bot @swinglab_alert_bot per: buy/sell, trailing stop, APM actions, morning briefing, evening report.
           </Card>
           <Card title="📱 Frontend React" color="#06b6d4">
-            Dashboard con: portfolio overview sync Alpaca, positions con SL/TP visibili,
-            multi-agent status, sectors ranking, trade history, analytics, guide dettagliata.
+            Dashboard con: portfolio overview, positions con SL/TP, multi-agent status, APM widget, trade history.
           </Card>
         </div>
       </Section>
@@ -453,35 +398,31 @@ export default function Guide() {
       <Section emoji="⚙️" title="10. Tech Stack">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
           <Card title="Backend" color="#3b82f6">
-            <strong>Python 3.11</strong> + FastAPI + Motor (MongoDB async) + XGBoost + scikit-learn + httpx (async HTTP)
+            Python 3.11 + FastAPI + Motor (MongoDB async) + XGBoost + scikit-learn + httpx
           </Card>
           <Card title="Frontend" color="#22c55e">
-            <strong>React 19</strong> + Recharts + Vercel deployment + responsive mobile-first
+            React 19 + Recharts + Vercel deployment
           </Card>
           <Card title="Database" color="#eab308">
-            <strong>MongoDB Atlas</strong> (Free M0). Collections indexed per performance.
-            Retention: trade_history unlimited, decisions 60 days.
+            MongoDB Atlas (Free M0). Collections indexed per performance.
           </Card>
           <Card title="Broker" color="#f97316">
-            <strong>Alpaca Paper Trading</strong> API v2. Supporta fractional shares,
-            portfolio history, real-time quotes IEX.
+            Alpaca Paper Trading API v2. Fractional shares supported.
           </Card>
           <Card title="LLM" color="#8b5cf6">
-            <strong>Gemini 2.0 Flash</strong> (Google) primary + <strong>Groq (Llama 3 70B)</strong> fallback.
+            Gemini 2.0 Flash + Groq (Llama 3 70B) + Cerebras fallback.
           </Card>
           <Card title="Market Data" color="#06b6d4">
-            <strong>Twelve Data</strong> API (800 requests/day free tier) per prezzi real-time e OHLCV storici.
+            Twelve Data API (800 requests/day free tier).
           </Card>
           <Card title="Deploy Backend" color="#ef4444">
-            <strong>Render.com</strong> (Free tier con async endpoint per non timeout).
-            URL: swinglab-backend.onrender.com.
+            Render.com (async endpoint per no timeout). URL: swinglab-backend.onrender.com
           </Card>
           <Card title="Deploy Frontend" color="#84cc16">
-            <strong>Vercel</strong> con auto-deploy da GitHub. Domain custom disponibile.
+            Vercel con auto-deploy da GitHub.
           </Card>
           <Card title="Automation" color="#f59e0b">
-            <strong>cron-job.org</strong> free tier con endpoint async.
-            Pipeline ogni 15 min market hours + keep-alive ogni 10 min.
+            cron-job.org free tier. Pipeline ogni 15 min + APM ogni 3h + Telegram briefing/report.
           </Card>
         </div>
       </Section>
@@ -499,7 +440,7 @@ export default function Guide() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <span style={{ fontSize: 24 }}>👥</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: 'white' }}>Multi-User Platform (v4.0)</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'white' }}>Multi-User Platform (v5.0)</div>
               <div style={{ fontSize: 11, color: '#94a3b8' }}>SwingLab as a Service — Coming Q3 2026</div>
             </div>
             <span style={{
@@ -518,55 +459,25 @@ export default function Guide() {
             Trasformazione di SwingLab in una <strong style={{ color: 'white' }}>piattaforma multi-tenant</strong> dove
             ogni utente ha il suo <strong style={{ color: '#22c55e' }}>account Alpaca personale</strong>,
             portfolio isolato, settings customizzati, e trade history separata.
-            Universe di stock e modelli ML condivisi per efficienza. Ideale per team, family accounts,
-            o portfolio manager che gestiscono più conti.
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginTop: 12 }}>
-            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
-              <div style={{ color: '#22c55e', fontWeight: 700 }}>🔐 Auth</div>
-              <div style={{ color: '#94a3b8' }}>Email + Password / OAuth</div>
-            </div>
-            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
-              <div style={{ color: '#3b82f6', fontWeight: 700 }}>🔑 Alpaca Keys</div>
-              <div style={{ color: '#94a3b8' }}>AES-256 encrypted per user</div>
-            </div>
-            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
-              <div style={{ color: '#eab308', fontWeight: 700 }}>📊 Data Isolation</div>
-              <div style={{ color: '#94a3b8' }}>user_id in ogni collection</div>
-            </div>
-            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
-              <div style={{ color: '#f97316', fontWeight: 700 }}>⚡ Multi-Pipeline</div>
-              <div style={{ color: '#94a3b8' }}>Queue job per user</div>
-            </div>
-            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
-              <div style={{ color: '#8b5cf6', fontWeight: 700 }}>👨‍💼 Admin Panel</div>
-              <div style={{ color: '#94a3b8' }}>Monitoring & analytics</div>
-            </div>
-            <div style={{ background: '#0f172a80', padding: 8, borderRadius: 6, fontSize: 10 }}>
-              <div style={{ color: '#06b6d4', fontWeight: 700 }}>💬 Team Features</div>
-              <div style={{ color: '#94a3b8' }}>Shared watchlist, chat</div>
-            </div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
-          <Card title="🎯 Short Term (1 mese)" color="#22c55e">
-            <strong>ML Retrain</strong>: aumentare accuracy WIN/LOSS al 55%+.
+          <Card title="🎯 Short Term (1-2 settimane)" color="#22c55e">
+            <strong>FASE 3 APM</strong>: Learning Loop settimanale.
+            <br/><strong>FASE 4 APM</strong>: Multi-target real execution.
+            <br/><strong>Dynamic Position Sizing</strong>: Kelly + R/R + ML.
+          </Card>
+          <Card title="🎯 Medium Term (1 mese)" color="#eab308">
+            <strong>Backtesting Engine</strong>: simulazione strategie storiche.
+            <br/><strong>Extended Hours</strong>: 10:00-02:00 CET.
             <br/><strong>VXX Indicator</strong>: volatilità estrema.
-            <br/><strong>Extended Hours</strong>: trading 10:00-02:00 CET.
-            <br/><strong>Auth System</strong>: base authentication JWT (prep multi-user).
           </Card>
-          <Card title="🎯 Medium Term (3 mesi)" color="#eab308">
-            <strong>Multi-User v4.0</strong>: piattaforma multi-tenant completa.
-            <br/><strong>Multi-Broker</strong>: supporto IB, Robinhood.
-            <br/><strong>Options Trading</strong>: strategie coperte.
-            <br/><strong>Backtesting Engine</strong>: test strategie storiche.
-          </Card>
-          <Card title="🎯 Long Term (6-12 mesi)" color="#8b5cf6">
-            <strong>Reinforcement Learning</strong>: Executor RL-based.
-            <br/><strong>Social Sentiment</strong>: Twitter/Reddit analysis.
-            <br/><strong>Custom Universe</strong>: stock list personalizzabile per user.
-            <br/><strong>Mobile App</strong>: iOS + Android nativa.
+          <Card title="🎯 Long Term (3-6 mesi)" color="#8b5cf6">
+            <strong>Multi-User v5.0</strong>: piattaforma SaaS.
+            <br/><strong>Multi-Broker</strong>: IB, Robinhood.
+            <br/><strong>Options Trading</strong>: covered calls, spreads.
+            <br/><strong>Mobile App</strong>: iOS + Android.
           </Card>
         </div>
       </Section>
@@ -575,6 +486,7 @@ export default function Guide() {
       <Section emoji="📚" title="12. Glossario Tecnico">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
           {[
+            ['APM', '🆕 Adaptive Position Manager - Agente 5 che gestisce posizioni aperte'],
             ['POC', 'Point of Control: prezzo con maggior volume tradato'],
             ['VA High/Low', 'Value Area: range del 70% del volume totale'],
             ['RSI', 'Relative Strength Index (momentum 0-100)'],
@@ -587,14 +499,17 @@ export default function Guide() {
             ['R/R Ratio', 'Risk/Reward: rapporto reward/risk (target 1.5:1+)'],
             ['Notional Buy', 'Ordine in dollari, non shares (supporta fractional)'],
             ['Software SL/TP', 'Stop/Target gestiti dall\'Executor, non nativi Alpaca'],
-            ['Bracket Order', 'Ordine composto: entry + TP + SL (legacy)'],
+            ['HOLD (APM)', 'APM mantiene la posizione, tesi valida'],
+            ['SCALE_OUT (APM)', 'APM chiude parziale, break-even sul resto'],
+            ['EXIT (APM)', 'APM chiude 100% subito, tesi rotta'],
+            ['TIGHTEN_STOP (APM)', 'APM alza il SL per proteggere profit'],
             ['Trailing Stop', 'Stop dinamico che segue il profit'],
             ['Setup Score', 'Punteggio 0-100 sulla qualità pre-confluence'],
             ['Breadth', '% di stock sopra la EMA50 (market health)'],
             ['Rotation Signal', 'offensive/defensive/mixed (sector rotation)'],
             ['Regime', 'BULL/NEUTRAL/BEAR/CRASH (market state)'],
             ['Exposure Multiplier', 'Fattore 0-1 per riduzione risk per regime'],
-            ['Shared Brain', 'MongoDB collection condivisa tra agenti'],
+            ['Shared Brain', 'MongoDB collection condivisa tra 5 agenti'],
             ['LLM Reasoning', 'Spiegazione italiana di ogni decisione'],
             ['XGBoost', 'Modello ML per predire WIN/LOSS trade'],
             ['Trend Predictor', 'ML che classifica UP/FLAT/DOWN a 5 giorni'],
@@ -603,8 +518,6 @@ export default function Guide() {
             ['Earnings Detection', 'LLM identifica trimestrali imminenti'],
             ['Time Decay', 'Peso ridotto per decisioni vecchie nel learning'],
             ['Trade Sync', 'Sincronizzazione Alpaca ↔ MongoDB automatica'],
-            ['Portfolio History', 'Equity curve day-by-day da Alpaca'],
-            ['Alpha vs SPY', 'Extra-return vs benchmark S&P 500'],
           ].map(([t, d]) => (
             <div key={t} style={{ background: '#1e293b', borderRadius: 6, padding: 8, fontSize: 12 }}>
               <span style={{ color: '#3b82f6', fontWeight: 700 }}>{t}</span>
@@ -616,18 +529,18 @@ export default function Guide() {
 
       {/* ---- FOOTER ---- */}
       <div style={{
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        background: 'linear-gradient(135deg, #1e1b3a 0%, #0f172a 100%)',
         borderRadius: 12,
         padding: 20,
         marginTop: 24,
-        border: '1px solid #334155',
+        border: '2px solid #8b5cf6',
         textAlign: 'center',
       }}>
         <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>
-          🚀 <strong style={{ color: 'white' }}>SwingLab v3.6</strong> — Multi-Agent AI Swing Trading Platform
+          🚀 <strong style={{ color: 'white' }}>SwingLab v4.0</strong> — Multi-Agent AI Swing Trading Platform with APM
         </div>
         <div style={{ fontSize: 11, color: '#64748b' }}>
-          Built with ❤️ • Paper Trading Mode • Real Market Data • 100% Automated
+          Built with ❤️ • Paper Trading Mode • Real Market Data • 100% Automated • Now with Adaptive Position Manager
         </div>
       </div>
     </div>
