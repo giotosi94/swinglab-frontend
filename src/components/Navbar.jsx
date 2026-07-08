@@ -24,14 +24,17 @@ export default function Navbar({
         <span style={{ fontSize: 20, fontWeight: 800 }}>SwingLab</span>
         <span
           style={{
-            fontSize: 10,
-            color: '#64748b',
-            background: '#1e293b',
-            padding: '2px 8px',
-            borderRadius: 4,
+            fontSize: 11,
+            color: '#8b5cf6',
+            background: 'linear-gradient(135deg, #8b5cf620 0%, #3b82f620 100%)',
+            padding: '3px 10px',
+            borderRadius: 6,
+            fontWeight: 700,
+            border: '1px solid #8b5cf644',
+            letterSpacing: 0.5,
           }}
         >
-          v0.3
+          v4.0 · APM
         </span>
         {traderData?.market?.regime && (
           <span
