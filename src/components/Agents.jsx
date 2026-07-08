@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AGENT_INFO } from '../utils/constants';
 import { getRegimeColor } from '../utils/helpers';
+import { fetchApmHistory, fetchApmStatus, fetchApmSummary } from '../utils/api';
 
 export default function Agents({
   agentsStatus, agentsLoading, selectedAgent, setSelectedAgent,
@@ -14,6 +15,33 @@ export default function Agents({
   const pipeline = ps?.pipeline || {};
   const brainRisk = agentsStatus?.shared_brain?.approved?.risk_report || {};
   const riskReport = { ...(ps?.risk_report || {}), ...brainRisk };
+
+  // 🆕 v4.0 — APM State
+  const [apmData, setApmData] = useState({
+    status: null,
+    summary: null,
+    history: [],
+    loading: true,
+  });
+
+  useEffect(() => {
+    async function loadApm() {
+      const [status, summary, historyResp] = await Promise.all([
+        fetchApmStatus().catch(() => null),
+        fetchApmSummary(7).catch(() => null),
+        fetchApmHistory(5).catch(() => ({ decisions: [] })),
+      ]);
+      setApmData({
+        status,
+        summary,
+        history: historyResp?.decisions || [],
+        loading: false,
+      });
+    }
+    loadApm();
+    const interval = setInterval(loadApm, 60000);
+    return () => clearInterval(interval);
+  }, [agentsStatus]);
 
   if (agentsLoading && !agentsStatus) {
     return (
@@ -84,7 +112,7 @@ export default function Agents({
         </div>
       </div>
 
-      {/* Pipeline Steps */}
+      {/* Pipeline Steps — 🆕 v4.0 con APM */}
       {ps && (
         <div
           style={{
@@ -119,9 +147,10 @@ export default function Agents({
               flexWrap: 'wrap',
             }}
           >
-            {['macro_analyst', 'alpha_strategist', 'risk_manager', 'executor'].map(
+            {['macro_analyst', 'alpha_strategist', 'risk_manager', 'adaptive_position_manager', 'executor'].map(
               (name, i) => {
                 const info = AGENT_INFO[name];
+                if (!info) return null;
                 const st = pipeline.steps?.[name] || 'unknown';
                 const bc =
                   st === 'ok'
@@ -139,7 +168,9 @@ export default function Agents({
                     <div
                       onClick={() => {
                         setSelectedAgent(name);
-                        fetchAgentDecisions(name);
+                        if (name !== 'adaptive_position_manager') {
+                          fetchAgentDecisions(name);
+                        }
                       }}
                       style={{
                         background: '#1e293b',
@@ -148,14 +179,14 @@ export default function Agents({
                         border: `2px solid ${bc}`,
                         cursor: 'pointer',
                         textAlign: 'center',
-                        minWidth: 130,
+                        minWidth: 120,
                       }}
                     >
                       <div style={{ fontSize: 20 }}>{info.emoji}</div>
                       <div
                         style={{
                           color: 'white',
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: 600,
                           marginTop: 2,
                         }}
@@ -251,7 +282,7 @@ export default function Agents({
           )}
           {market.llm_reasoning && (
             <div style={{ fontSize: 10, color: '#475569', marginTop: 4, fontStyle: 'italic' }}>
-              💬 Questo reasoning viene letto da Alpha, Risk e Executor
+              💬 Questo reasoning viene letto da Alpha, Risk, APM ed Executor
             </div>
           )}
         </div>
@@ -322,6 +353,164 @@ export default function Agents({
         </div>
       )}
 
+      {/* 🆕 v4.0 — APM Report */}
+      {apmData.status && (
+        <div style={{
+          background: 'linear-gradient(135deg, #1e1b3a 0%, #0f172a 100%)',
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 20,
+          border: '2px solid #8b5cf6',
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12,
+            flexWrap: 'wrap',
+            gap: 8,
+          }}>
+            <h3 style={{ margin: 0, fontSize: 15, color: '#8b5cf6' }}>
+              🎯 Adaptive Position Manager (APM)
+            </h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <span style={{
+                padding: '3px 10px',
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 700,
+                background: apmData.status.enabled ? '#22c55e22' : '#ef444422',
+                color: apmData.status.enabled ? '#22c55e' : '#ef4444',
+                border: `1px solid ${apmData.status.enabled ? '#22c55e44' : '#ef444444'}`,
+              }}>
+                {apmData.status.enabled ? '✅ ENABLED' : '❌ DISABLED'}
+              </span>
+              {apmData.status.remaining_hours !== null && apmData.status.remaining_hours !== undefined && (
+                <span style={{
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  fontSize: 10,
+                  background: '#3b82f622',
+                  color: '#3b82f6',
+                  border: '1px solid #3b82f644',
+                }}>
+                  ⏰ Next: {apmData.status.remaining_hours}h
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Stats */}
+          {apmData.summary && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+              gap: 8,
+              marginBottom: 12,
+            }}>
+              {[
+                { l: 'Total', v: apmData.summary.total_decisions, c: 'white' },
+                { l: 'Actions', v: apmData.summary.actions_taken, c: '#f97316' },
+                { l: 'HOLD', v: apmData.summary.counts?.HOLD || 0, c: '#22c55e' },
+                { l: 'Scale', v: apmData.summary.counts?.SCALE_OUT || 0, c: '#eab308' },
+                { l: 'Exit', v: apmData.summary.counts?.EXIT || 0, c: '#ef4444' },
+                { l: 'Tighten', v: apmData.summary.counts?.TIGHTEN_STOP || 0, c: '#f97316' },
+              ].map((item) => (
+                <div key={item.l} style={{
+                  background: '#1e293b',
+                  borderRadius: 8,
+                  padding: 10,
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>{item.l}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: item.c, marginTop: 2 }}>
+                    {item.v}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Latest 3 decisions */}
+          {apmData.history.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 6 }}>
+                📋 Latest 5 Decisions
+              </div>
+              {apmData.history.slice(0, 5).map((d) => {
+                const colors = {
+                  HOLD: '#22c55e',
+                  EXIT: '#ef4444',
+                  SCALE_OUT: '#eab308',
+                  TIGHTEN_STOP: '#f97316',
+                };
+                const emojis = {
+                  HOLD: '🟢',
+                  EXIT: '🔴',
+                  SCALE_OUT: '🟡',
+                  TIGHTEN_STOP: '🛡️',
+                };
+                const color = colors[d.decision] || '#64748b';
+                const emoji = emojis[d.decision] || '⚪';
+                return (
+                  <div key={d.id} style={{
+                    background: '#1e293b',
+                    borderRadius: 6,
+                    padding: 8,
+                    marginBottom: 4,
+                    fontSize: 11,
+                    borderLeft: `3px solid ${color}`,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                  }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 12 }}>{emoji}</span>
+                      <span style={{ fontWeight: 700, color: 'white' }}>{d.ticker}</span>
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        background: color + '22',
+                        color: color,
+                      }}>
+                        {d.decision}
+                      </span>
+                      <span style={{
+                        color: d.current_pnl_pct >= 0 ? '#22c55e' : '#ef4444',
+                        fontWeight: 700,
+                      }}>
+                        {d.current_pnl_pct >= 0 ? '+' : ''}{d.current_pnl_pct?.toFixed(2)}%
+                      </span>
+                    </div>
+                    <span style={{ color: '#64748b', fontSize: 10 }}>
+                      {d.created_at ? new Date(d.created_at + 'Z').toLocaleString('en-US', {
+                        month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+                      }) : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Info banner */}
+          <div style={{
+            padding: '8px 10px',
+            background: '#8b5cf61a',
+            border: '1px solid #8b5cf644',
+            borderRadius: 8,
+            fontSize: 11,
+            color: '#c4b5fd',
+          }}>
+            💬 APM rivaluta ogni <strong>{apmData.status.interval_hours}h</strong> tutte le posizioni aperte con LLM reasoning italiano. Decide HOLD/SCALE OUT/EXIT/TIGHTEN in modo adattivo.
+          </div>
+        </div>
+      )}
+
       {/* Agent Cards */}
       <div
         style={{
@@ -341,7 +530,9 @@ export default function Agents({
               key={name}
               onClick={() => {
                 setSelectedAgent(is_ ? null : name);
-                if (!is_) fetchAgentDecisions(name);
+                if (!is_ && name !== 'adaptive_position_manager') {
+                  fetchAgentDecisions(name);
+                }
               }}
               style={{
                 background: '#0f172a',
@@ -371,7 +562,6 @@ export default function Agents({
                 {info.desc}
               </div>
 
-              {/* Agent-specific params */}
               {name === 'macro_analyst' && p.w_spy_trend && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {[
@@ -397,26 +587,10 @@ export default function Agents({
 
               {name === 'alpha_strategist' && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span
-                    style={{
-                      background: '#1e293b',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: '#94a3b8',
-                    }}
-                  >
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
                     Min Conf: {p.min_confluence || 35}
                   </span>
-                  <span
-                    style={{
-                      background: '#1e293b',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: '#94a3b8',
-                    }}
-                  >
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
                     Max RSI: {p.max_rsi_entry || 68}
                   </span>
                   {(p.best_setups || []).slice(0, 2).map((s) => (
@@ -438,64 +612,38 @@ export default function Agents({
 
               {name === 'risk_manager' && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span
-                    style={{
-                      background: '#1e293b',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: '#94a3b8',
-                    }}
-                  >
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
                     Risk: {p.risk_pct_per_trade || 2}%
                   </span>
-                  <span
-                    style={{
-                      background: '#1e293b',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: '#94a3b8',
-                    }}
-                  >
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
                     R/R{'\u2265'}{p.min_risk_reward || 1.5}
                   </span>
-                  <span
-                    style={{
-                      background: '#1e293b',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: '#94a3b8',
-                    }}
-                  >
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
                     Max: {p.max_positions || 5} pos
+                  </span>
+                </div>
+              )}
+
+              {name === 'adaptive_position_manager' && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
+                    Check: {p.apm_check_interval_hours || 3}h
+                  </span>
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
+                    Exit Conf: {p.apm_exit_confluence_threshold || 30}
+                  </span>
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: p.apm_enabled !== false ? '#8b5cf6' : '#ef4444' }}>
+                    {p.apm_enabled !== false ? '✅ ON' : '❌ OFF'}
                   </span>
                 </div>
               )}
 
               {name === 'executor' && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span
-                    style={{
-                      background: '#1e293b',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: '#94a3b8',
-                    }}
-                  >
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
                     Buffer: {p.limit_price_buffer_pct || 0.5}%
                   </span>
-                  <span
-                    style={{
-                      background: '#1e293b',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: p.send_telegram !== false ? '#22c55e' : '#ef4444',
-                    }}
-                  >
+                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: p.send_telegram !== false ? '#22c55e' : '#ef4444' }}>
                     {p.send_telegram !== false ? '\uD83D\uDCF1 TG On' : '\uD83D\uDCF1 TG Off'}
                   </span>
                 </div>
@@ -506,7 +654,7 @@ export default function Agents({
       </div>
 
       {/* Selected Agent Decisions */}
-      {selectedAgent && (
+      {selectedAgent && selectedAgent !== 'adaptive_position_manager' && (
         <div
           style={{
             background: '#0f172a',
@@ -589,7 +737,7 @@ export default function Agents({
         </div>
       )}
 
-{/* Executor AI Reasoning */}
+      {/* Executor AI Reasoning */}
       {agentsStatus?.shared_brain?.executions?.details?.llm_reasoning && (
         <div style={{
           background: '#0f172a', borderRadius: 12, padding: 16, marginTop: 20, border: '1px solid #1e293b',
