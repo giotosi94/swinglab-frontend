@@ -382,10 +382,13 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
               </div>
             )}
             {newsData.news.slice(0, 3).map((n, i) => (
-              <div key={i} style={{ fontSize: 11, color: '#94a3b8', padding: '4px 0', borderBottom: i < 2 ? '1px solid #0f172a' : 'none' }}>
-                {n.url} style={{ color: '#3b82f6', textDecoration: 'none' }}>
+              <div key={i} style={{ fontSize: 11, padding: '4px 0', borderBottom: i < 2 ? '1px solid #0f172a' : 'none' }}>
+                <div 
+                  onClick={() => window.open(n.url, '_blank')}
+                  style={{ color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline' }}
+                >
                   {n.headline}
-                </a>
+                </div>
                 <div style={{ fontSize: 9, color: '#475569', marginTop: 2 }}>
                   {n.source} • {n.created_at ? new Date(n.created_at).toLocaleDateString() : ''}
                 </div>
