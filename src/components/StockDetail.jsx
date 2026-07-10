@@ -619,7 +619,7 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             )}
             {newsData.news.slice(0, 3).map((n, i) => (
               <div key={i} style={{ fontSize: 11, color: '#94a3b8', padding: '4px 0', borderBottom: i < 2 ? '1px solid #0f172a' : 'none' }}>
-                {n.url}
+                {n.url}_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>
                   {n.headline}
                 </a>
                 <div style={{ fontSize: 9, color: '#475569', marginTop: 2 }}>
