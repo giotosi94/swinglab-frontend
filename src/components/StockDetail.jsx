@@ -1,45 +1,21 @@
 import React, { useState } from 'react';
-import {
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  Cell,
-} from 'recharts';
 import { getScoreColor, getSmartAlert } from '../utils/helpers';
 import { fetchNews } from '../utils/api';
+import TradingViewChart from './TradingViewChart';
 
 export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, trendData }) {
   const alert = getSmartAlert(stock);
- const [buyQty, setBuyQty] = useState(1);
+  const [buyQty, setBuyQty] = useState(1);
   const [buyLoading, setBuyLoading] = useState(false);
   const [newsData, setNewsData] = useState(null);
 
   React.useEffect(() => {
-  if (stock?.ticker) {
-    fetchNews(stock.ticker)
-      .then(d => { if (d && d.news) setNewsData(d); })
-      .catch(() => {});
-  }
-}, [stock?.ticker]);
-
-  const history = stock.price_history || [];
-
-  // Prepare MACD data from history (approximate from EMAs if not in data)
-  const chartData = history.map((d) => ({
-    ...d,
-    macd_hist:
-      d.ema10 && d.ema20
-        ? Math.round((d.ema10 - d.ema20) * 100) / 100
-        : 0,
-  }));
+    if (stock?.ticker) {
+      fetchNews(stock.ticker)
+        .then(d => { if (d && d.news) setNewsData(d); })
+        .catch(() => {});
+    }
+  }, [stock?.ticker]);
 
   const wyckoff = stock.wyckoff || {};
   const accumulation = stock.accumulation || {};
@@ -208,6 +184,11 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
               </div>
             </div>
           ))}
+        </div>
+
+        {/* ---- 🆕 TRADINGVIEW CHART (sostituisce Price+EMA+MACD+RSI+Volume custom) ---- */}
+        <div style={{ marginBottom: 16 }}>
+          <TradingViewChart ticker={stock.ticker} height={550} theme="dark" />
         </div>
 
         {/* ---- Wyckoff + Accumulation + Patterns ---- */}
@@ -444,7 +425,7 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
           </div>
         )}
 
-{/* ---- Trend Prediction ---- */}
+        {/* ---- Trend Prediction ---- */}
         {trendData && trendData.prediction && (
           <div style={{
             background: '#1e293b', borderRadius: 8, padding: 12, marginBottom: 16,
@@ -482,7 +463,8 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             </div>
           </div>
         )}
-{/* ---- Auto Analysis Summary ---- */}
+
+        {/* ---- Auto Analysis Summary ---- */}
         <div style={{
           background: '#1e293b', borderRadius: 8, padding: 14, marginBottom: 16,
           borderLeft: '3px solid #3b82f6',
@@ -512,7 +494,6 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             const bullish = patterns.filter(p => p.type === 'bullish');
             const bearish = patterns.filter(p => p.type === 'bearish');
 
-            // Determine overall rating
             let rating = 'NEUTRO';
             let ratingColor = '#eab308';
             let ratingEmoji = '⚠️';
@@ -520,7 +501,6 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             else if (score >= 50 && conf >= 4) { rating = 'MODERATO'; ratingColor = '#22c55e'; ratingEmoji = '🟡'; }
             else if (score < 30 || conf < 2) { rating = 'DEBOLE'; ratingColor = '#ef4444'; ratingEmoji = '🔴'; }
 
-            // EMA structure
             let emaText = '';
             let emaOk = false;
             if (price > ema10 && ema10 > ema20 && ema20 > ema50) { emaText = 'Full align — uptrend forte'; emaOk = true; }
@@ -528,7 +508,6 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             else if (price > ema50) { emaText = 'Sopra EMA50 ma struttura rotta'; }
             else { emaText = 'Sotto tutte le EMA — struttura ribassista'; }
 
-            // RSI interpretation
             let rsiText = '';
             if (rsi < 30) rsiText = `RSI ${rsi.toFixed(0)} ipervenduto — possibile rimbalzo`;
             else if (rsi < 40) rsiText = `RSI ${rsi.toFixed(0)} debole — cautela`;
@@ -536,14 +515,12 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             else if (rsi < 70) rsiText = `RSI ${rsi.toFixed(0)} forte — momentum positivo`;
             else rsiText = `RSI ${rsi.toFixed(0)} ipercomprato — rischio pullback`;
 
-            // Volume interpretation
             let volText = '';
             if (relVol >= 2 && changePct < -1) volText = `Vol ${relVol.toFixed(1)}x elevato in discesa — distribuzione`;
             else if (relVol >= 2 && changePct > 1) volText = `Vol ${relVol.toFixed(1)}x elevato in salita — accumulazione`;
             else if (relVol >= 1.5) volText = `Vol ${relVol.toFixed(1)}x sopra media — interesse attivo`;
             else volText = `Vol ${relVol.toFixed(1)}x nella norma`;
 
-            // Verdict
             let verdict = '';
             let verdictColor = '#94a3b8';
             if (score >= 60 && conf >= 5 && (trend === 'UP' || !trend) && emaOk) {
@@ -557,43 +534,32 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             }
 
             const lines = [];
-
-            // Rating
             lines.push({ icon: ratingEmoji, text: `${rating} — Score ${score}, Confluence ${conf}/10`, color: ratingColor, bold: true });
 
-            // Trend
             if (trend) {
               const tc = trend === 'UP' ? '#22c55e' : trend === 'DOWN' ? '#ef4444' : '#eab308';
               lines.push({ icon: '📈', text: `Trend 5d: ${trend} ${trendConf.toFixed(0)}%`, color: tc });
             }
 
-            // ML
             if (ml) {
               const mc = ml >= 60 ? '#22c55e' : ml >= 45 ? '#eab308' : '#ef4444';
               lines.push({ icon: '🧠', text: `ML Score: ${ml}% ${mlScore?.prediction || ''}`, color: mc });
             }
 
-            // RSI
             lines.push({ icon: '📉', text: rsiText, color: rsi < 30 || rsi > 70 ? '#f97316' : '#94a3b8' });
-
-            // EMA
             lines.push({ icon: '📊', text: `EMA: ${emaText}`, color: emaOk ? '#22c55e' : '#ef4444' });
 
-            // Wyckoff
             if (wyPhase !== 'unknown') {
               const wc = { accumulation: '#22c55e', markup: '#3b82f6', distribution: '#f97316', markdown: '#ef4444', spring: '#8b5cf6' }[wyPhase] || '#94a3b8';
               lines.push({ icon: '🔄', text: `Wyckoff: ${wyPhase} — Accum: ${accumScore}`, color: wc });
             }
 
-            // Volume
             lines.push({ icon: '📦', text: volText, color: relVol >= 2 ? '#f97316' : '#94a3b8' });
 
-            // POC
             if (pocDist) {
               lines.push({ icon: '🎯', text: `POC $${poc.toFixed(2)} (${pocAbove ? '+' : '-'}${pocDist}%) — ${pocAbove ? 'sopra' : 'sotto'} POC`, color: pocAbove ? '#22c55e' : '#f97316' });
             }
 
-            // Patterns
             if (bullish.length > 0) {
               lines.push({ icon: '🟢', text: `Pattern bullish: ${bullish.map(p => p.name).join(', ')}`, color: '#22c55e' });
             }
@@ -653,7 +619,7 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             )}
             {newsData.news.slice(0, 3).map((n, i) => (
               <div key={i} style={{ fontSize: 11, color: '#94a3b8', padding: '4px 0', borderBottom: i < 2 ? '1px solid #0f172a' : 'none' }}>
-                <a href={n.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+                {n.url}#3b82f6', textDecoration: 'none' }}>
                   {n.headline}
                 </a>
                 <div style={{ fontSize: 9, color: '#475569', marginTop: 2 }}>
@@ -662,218 +628,6 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
               </div>
             ))}
           </div>
-        )}
-
-        {/* ---- Price Chart with EMA Lines ---- */}
-        {chartData.length > 0 && (
-          <>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
-              {'📈'} Price + EMA (10/20/50)
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={chartData}>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  domain={['auto', 'auto']}
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: 8,
-                    fontSize: 11,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="close"
-                  stroke="white"
-                  strokeWidth={2}
-                  dot={false}
-                  name="Price"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="ema10"
-                  stroke="#3b82f6"
-                  strokeWidth={1}
-                  dot={false}
-                  strokeDasharray="2 2"
-                  name="EMA 10"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="ema20"
-                  stroke="#eab308"
-                  strokeWidth={1}
-                  dot={false}
-                  strokeDasharray="4 4"
-                  name="EMA 20"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="ema50"
-                  stroke="#ef4444"
-                  strokeWidth={1}
-                  dot={false}
-                  strokeDasharray="6 6"
-                  name="EMA 50"
-                />
-                {stock.poc_price && (
-                  <ReferenceLine
-                    y={stock.poc_price}
-                    stroke="#8b5cf6"
-                    strokeDasharray="4 4"
-                    label={{
-                      value: 'POC',
-                      fill: '#8b5cf6',
-                      fontSize: 10,
-                      position: 'right',
-                    }}
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-
-            {/* ---- EMA Legend ---- */}
-            <div
-              style={{
-                display: 'flex',
-                gap: 16,
-                justifyContent: 'center',
-                marginTop: 4,
-                marginBottom: 16,
-              }}
-            >
-              {[
-                { c: 'white', l: 'Price', d: '' },
-                { c: '#3b82f6', l: 'EMA 10', d: '· ·' },
-                { c: '#eab308', l: 'EMA 20', d: '- -' },
-                { c: '#ef4444', l: 'EMA 50', d: '— —' },
-                { c: '#8b5cf6', l: 'POC', d: '- -' },
-              ].map((item) => (
-                <span
-                  key={item.l}
-                  style={{ fontSize: 10, color: item.c, fontWeight: 600 }}
-                >
-                  {item.d} {item.l}
-                </span>
-              ))}
-            </div>
-
-            {/* ---- MACD Histogram ---- */}
-            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
-              {'📊'} MACD Histogram (EMA10 - EMA20)
-            </div>
-            <ResponsiveContainer width="100%" height={100}>
-              <BarChart data={chartData}>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 9, fill: '#64748b' }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis tick={{ fontSize: 9, fill: '#64748b' }} />
-                <Tooltip
-                  contentStyle={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: 8,
-                    fontSize: 11,
-                  }}
-                />
-                <ReferenceLine y={0} stroke="#334155" />
-                <Bar dataKey="macd_hist" name="MACD">
-                  {chartData.map((d, i) => (
-                    <Cell
-                      key={i}
-                      fill={d.macd_hist >= 0 ? '#22c55e' : '#ef4444'}
-                      fillOpacity={0.8}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-
-            {/* ---- RSI Chart ---- */}
-            <div
-              style={{
-                fontSize: 12,
-                color: '#94a3b8',
-                marginBottom: 6,
-                marginTop: 12,
-              }}
-            >
-              {'📉'} RSI (14)
-            </div>
-            <ResponsiveContainer width="100%" height={100}>
-              <AreaChart data={chartData}>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 9, fill: '#64748b' }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  ticks={[30, 50, 70]}
-                  tick={{ fontSize: 9, fill: '#64748b' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: 8,
-                    fontSize: 11,
-                  }}
-                />
-                <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" />
-                <ReferenceLine y={30} stroke="#22c55e" strokeDasharray="3 3" />
-                <Area
-                  type="monotone"
-                  dataKey="rsi"
-                  stroke="#8b5cf6"
-                  fill="#8b5cf620"
-                  strokeWidth={1.5}
-                  name="RSI"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-
-            {/* ---- Volume ---- */}
-            <div
-              style={{
-                fontSize: 12,
-                color: '#94a3b8',
-                marginBottom: 6,
-                marginTop: 12,
-              }}
-            >
-              {'📦'} Volume
-            </div>
-            <ResponsiveContainer width="100%" height={80}>
-              <BarChart data={chartData}>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 9, fill: '#64748b' }}
-                  interval="preserveStartEnd"
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: 8,
-                    fontSize: 11,
-                  }}
-                  formatter={(v) => [v?.toLocaleString(), 'Volume']}
-                />
-                <Bar dataKey="volume" fill="#3b82f6" fillOpacity={0.4} name="Volume" />
-              </BarChart>
-            </ResponsiveContainer>
-          </>
         )}
       </div>
     </div>
