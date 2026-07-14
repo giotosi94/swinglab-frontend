@@ -47,6 +47,8 @@ export const runTrader = () => post('/api/data/autotrader/run');
 
 // ---------- Search ----------
 export const searchStock = (query) => get(`/api/data/search/${query.trim().toUpperCase()}`);
+// 🆕 v4.2 — Lista completa ticker per autocomplete
+export const fetchAllTickers = () => get('/api/data/tickers/list');
 
 // ---------- Sectors & Assets ----------
 export async function fetchSectorsAndAssets(limit = 250) {
