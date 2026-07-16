@@ -5,6 +5,7 @@ import {
 import { getSetupBadge } from '../utils/helpers';
 import { fetchBenchmark, fetchPositionsDetail } from '../utils/api';
 import ApmActions from './ApmActions';
+import PositionTargets from './PositionTargets';
 
 export default function Alpaca({
   alpacaData, equityPeriods, selectedPeriod, setSelectedPeriod,
@@ -380,6 +381,7 @@ export default function Alpaca({
       )}
 
       {/* ===== 🆕 v4.0 — APM Actions Widget ===== */}
+      <PositionTargets />
       <ApmActions />
       
       {/* ===== Portfolio Summary ===== */}
