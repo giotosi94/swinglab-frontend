@@ -23,7 +23,7 @@ export default function PositionTargets() {
   if (!data || !data.positions || data.positions.length === 0) return null;
 
   const toggleExpand = (ticker) => {
-    setExpanded(prev => ({ ...prev, [tickericker] }));
+    setExpanded(prev => ({ ...prev, [ticker]: !prev[ticker] }));
   };
 
   return (
