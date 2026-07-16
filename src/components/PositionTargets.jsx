@@ -23,7 +23,7 @@ export default function PositionTargets() {
   if (!data || !data.positions || data.positions.length === 0) return null;
 
   const toggleExpand = (ticker) => {
-    setExpanded(prev => ({ ...prev, !prev[ticker] }));
+    setExpanded(prev => ({ ...prev, [tickericker] }));
   };
 
   return (
@@ -34,9 +34,7 @@ export default function PositionTargets() {
       marginBottom: 20,
       border: '2px solid #8b5cf6',
     }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap',
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 24 }}>🎯</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800 }}>Adaptive Position Targets</div>
@@ -75,7 +73,6 @@ export default function PositionTargets() {
                 border: `1px solid ${isProfit ? '#22c55e30' : '#ef444430'}`,
               }}
             >
-              {/* HEADER row */}
               <div
                 onClick={() => toggleExpand(p.ticker)}
                 style={{
@@ -89,7 +86,7 @@ export default function PositionTargets() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
                   <span style={{ fontSize: 15, fontWeight: 800 }}>{p.ticker}</span>
-                  {p.is_adaptive && (
+                  {p.is_adaptive ? (
                     <span style={{
                       padding: '2px 8px',
                       background: '#8b5cf633',
@@ -98,8 +95,7 @@ export default function PositionTargets() {
                       fontWeight: 700,
                       color: '#8b5cf6',
                     }}>ADAPTIVE</span>
-                  )}
-                  {!p.is_adaptive && (
+                  ) : (
                     <span style={{
                       padding: '2px 8px',
                       background: '#64748b33',
@@ -133,7 +129,6 @@ export default function PositionTargets() {
                 </div>
               </div>
 
-              {/* PROGRESS BAR compact */}
               <div style={{
                 marginTop: 10,
                 display: 'flex',
@@ -163,7 +158,6 @@ export default function PositionTargets() {
                 ))}
               </div>
 
-              {/* TARGETS INLINE (always visible) */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
@@ -194,7 +188,6 @@ export default function PositionTargets() {
                 ))}
               </div>
 
-              {/* EXPANDED DETAILS */}
               {isExpanded && (
                 <div style={{
                   marginTop: 12,
