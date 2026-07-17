@@ -44,7 +44,11 @@ export default function PositionsUnified({ alpacaData, alpacaClose, alpacaCloseA
   assets.forEach((a) => { assetMap[a.ticker] = a; });
 
   const toggleExpand = (ticker) => {
-    setExpanded(prev => ({ ...prev, !prev[ticker] }));
+    setExpanded(prev => {
+      const newState = { ...prev };
+      newState[ticker] = !prev[ticker];
+      return newState;
+    });
   };
 
   const getDistanceColor = (distancePct, isTarget) => {
