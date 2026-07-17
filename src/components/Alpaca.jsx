@@ -382,6 +382,14 @@ export default function Alpaca({
 
       {/* ===== 🆕 v4.0 — APM Actions Widget ===== */}
       <ApmActions />
+
+      {/* ===== v4.6 Unified Positions with Adaptive Targets ===== */}
+      <PositionsUnified
+        alpacaData={alpacaData}
+        alpacaClose={alpacaClose}
+        alpacaCloseAll={alpacaCloseAll}
+        assets={assets}
+      />
       
       {/* ===== Portfolio Summary ===== */}
       {alpacaData.positions?.length > 0 && (
