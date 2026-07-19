@@ -138,7 +138,7 @@ export default function Navbar({
             letterSpacing: 0.5,
           }}
         >
-          v4.2 · APM
+          v4.7 · ADAPTIVE
         </span>
         {traderData?.market?.regime && (
           <span
