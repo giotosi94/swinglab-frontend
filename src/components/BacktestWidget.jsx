@@ -26,14 +26,15 @@ export default function BacktestWidget() {
     }
   };
 
+  const m = result?.metrics || {};
   const metrics = result
     ? [
-        { label: "Total Return", value: (result.total_return ?? 0).toFixed(2) + "%", good: (result.total_return ?? 0) > 0 },
-        { label: "Sharpe", value: (result.sharpe ?? 0).toFixed(2), good: (result.sharpe ?? 0) > 1 },
-        { label: "Sortino", value: (result.sortino ?? 0).toFixed(2), good: (result.sortino ?? 0) > 1.5 },
-        { label: "Max Drawdown", value: (result.max_drawdown ?? 0).toFixed(2) + "%", good: (result.max_drawdown ?? 0) < 10 },
-        { label: "Win Rate", value: (result.win_rate ?? 0).toFixed(1) + "%", good: (result.win_rate ?? 0) > 55 },
-        { label: "Profit Factor", value: (result.profit_factor ?? 0).toFixed(2), good: (result.profit_factor ?? 0) > 1.2 },
+        { label: "Total Return", value: (m.total_return_pct ?? 0).toFixed(2) + "%", good: (m.total_return_pct ?? 0) > 0 },
+        { label: "Sharpe", value: (m.sharpe_ratio ?? 0).toFixed(2), good: (m.sharpe_ratio ?? 0) > 1 },
+        { label: "Sortino", value: (m.sortino_ratio ?? 0).toFixed(2), good: (m.sortino_ratio ?? 0) > 1.5 },
+        { label: "Max Drawdown", value: (m.max_drawdown_pct ?? 0).toFixed(2) + "%", good: (m.max_drawdown_pct ?? 0) < 10 },
+        { label: "Win Rate", value: (m.win_rate ?? 0).toFixed(1) + "%", good: (m.win_rate ?? 0) > 55 },
+        { label: "Profit Factor", value: (m.profit_factor ?? 0).toFixed(2), good: (m.profit_factor ?? 0) > 1.2 },
       ]
     : [];
 
@@ -96,7 +97,7 @@ export default function BacktestWidget() {
 
       {result?.total_trades != null && !result.error && (
         <p className="text-xs text-slate-500 mt-3">
-          {result.total_trades} trade simulati · config 0.4/0.7/1.0 (validata)
+          {result.total_trades} trade simulati · config 0.4/0.7/1.0 · SPY {result.benchmark?.spy_return_pct ?? 0}% (α {result.benchmark?.alpha ?? 0}%)
         </p>
       )}
     </div>
