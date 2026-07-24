@@ -6,6 +6,8 @@ import {
 import * as api from '../utils/api';
 import BacktestWidget from "./BacktestWidget";
 import WinRateBreakdown from "./WinRateBreakdown";
+import InfoTip from "./InfoTip";
+import { TIPS } from "../utils/metricTips";
 
 const REGIME_COLORS = {
   BULL: '#22c55e', NEUTRAL: '#eab308', BEAR: '#f97316',
@@ -70,26 +72,33 @@ export default function Analytics() {
       {tab === 'winrate' && <WinRateBreakdown data={data} />}
 
       {/* ==================== OVERVIEW ==================== */}
-      {tab === 'overview' && (
-        <>
-          {/* Key Metrics */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 20 }}>
-            {[
-              { l: 'Sharpe Ratio', v: data.sharpe, c: data.sharpe >= 1 ? '#22c55e' : data.sharpe >= 0.5 ? '#eab308' : '#ef4444' },
-              { l: 'Sortino Ratio', v: data.sortino >= 999 ? '∞' : data.sortino, c: data.sortino >= 1.5 ? '#22c55e' : data.sortino >= 0.7 ? '#eab308' : '#ef4444' },
-              { l: 'Expectancy', v: `${data.expectancy >= 0 ? '+' : ''}${data.expectancy}%`, c: data.expectancy >= 0 ? '#22c55e' : '#ef4444' },
-              { l: 'Profit Factor', v: data.profit_factor >= 999 ? '∞' : data.profit_factor, c: data.profit_factor >= 1.5 ? '#22c55e' : data.profit_factor >= 1 ? '#eab308' : '#ef4444' },
-              { l: 'Max Drawdown', v: `${data.max_drawdown}%`, c: data.max_drawdown > -5 ? '#22c55e' : data.max_drawdown > -10 ? '#eab308' : '#ef4444' },
-              { l: 'Win Rate', v: `${data.win_rate}%`, c: data.win_rate >= 50 ? '#22c55e' : '#ef4444' },
-              { l: 'Total P&L', v: `${data.total_pnl_pct >= 0 ? '+' : ''}${data.total_pnl_pct}%`, c: data.total_pnl_pct >= 0 ? '#22c55e' : '#ef4444' },
-              { l: 'Total P&L $', v: `${data.total_pnl_dollar >= 0 ? '+' : ''}$${data.total_pnl_dollar}`, c: data.total_pnl_dollar >= 0 ? '#22c55e' : '#ef4444' },
-            ].map((m) => (
-              <div key={m.l} style={{ background: '#0f172a', borderRadius: 10, padding: 14, textAlign: 'center', border: '1px solid #1e293b' }}>
-                <div style={{ fontSize: 10, color: '#94a3b8' }}>{m.l}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: m.c || 'white', marginTop: 4 }}>{m.v}</div>
-              </div>
-            ))}
-          </div>
+{tab === 'overview' && (
+  <>
+    {/* Warning campione limitato */}
+    {data.n_positions != null && data.n_positions < 30 && (
+      <div style={{ background: "#eab30820", border: "1px solid #eab30844", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: 12, color: "#eab308" }}>
+        ⚠️ Campione limitato ({data.n_positions} posizioni). Sharpe, Sortino e drawdown diventano affidabili con 30+ trade chiusi.
+      </div>
+    )}
+
+    {/* Key Metrics */}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 20 }}>
+      {[
+        { l: 'Sharpe Ratio', tip: TIPS.sharpe, v: data.sharpe, c: data.sharpe >= 1 ? '#22c55e' : data.sharpe >= 0.5 ? '#eab308' : '#ef4444' },
+        { l: 'Sortino Ratio', tip: TIPS.sortino, v: data.sortino >= 999 ? '∞' : data.sortino, c: data.sortino >= 1.5 ? '#22c55e' : data.sortino >= 0.7 ? '#eab308' : '#ef4444' },
+        { l: 'Expectancy', tip: TIPS.expectancy, v: `${data.expectancy >= 0 ? '+' : ''}${data.expectancy}%`, c: data.expectancy >= 0 ? '#22c55e' : '#ef4444' },
+        { l: 'Profit Factor', tip: TIPS.profit_factor, v: data.profit_factor >= 999 ? '∞' : data.profit_factor, c: data.profit_factor >= 1.5 ? '#22c55e' : data.profit_factor >= 1 ? '#eab308' : '#ef4444' },
+        { l: 'Max Drawdown', tip: TIPS.max_drawdown, v: `${data.max_drawdown}%`, c: data.max_drawdown > -5 ? '#22c55e' : data.max_drawdown > -10 ? '#eab308' : '#ef4444' },
+        { l: 'Win Rate', tip: TIPS.win_rate, v: `${data.win_rate}%`, c: data.win_rate >= 50 ? '#22c55e' : '#ef4444' },
+        { l: 'Total P&L', tip: TIPS.total_pnl_pct, v: `${data.total_pnl_pct >= 0 ? '+' : ''}${data.total_pnl_pct}%`, c: data.total_pnl_pct >= 0 ? '#22c55e' : '#ef4444' },
+        { l: 'Total P&L $', tip: TIPS.total_pnl_dollar, v: `${data.total_pnl_dollar >= 0 ? '+' : ''}$${data.total_pnl_dollar}`, c: data.total_pnl_dollar >= 0 ? '#22c55e' : '#ef4444' },
+      ].map((m) => (
+        <div key={m.l} style={{ background: '#0f172a', borderRadius: 10, padding: 14, textAlign: 'center', border: '1px solid #1e293b' }}>
+          <div style={{ fontSize: 10, color: '#94a3b8' }}>{m.l}{m.tip && <InfoTip text={m.tip} />}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: m.c || 'white', marginTop: 4 }}>{m.v}</div>
+        </div>
+      ))}
+    </div>
 
           {/* Streaks + Holding */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
