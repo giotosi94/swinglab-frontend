@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
 import * as api from '../utils/api';
+import BacktestWidget from "./BacktestWidget";
 
 const REGIME_COLORS = {
   BULL: '#22c55e', NEUTRAL: '#eab308', BEAR: '#f97316',
@@ -44,6 +45,7 @@ export default function Analytics() {
     { id: 'drawdown', label: '📉 Drawdown' },
     { id: 'breakdown', label: '🔍 Breakdown' },
     { id: 'monthly', label: '📅 Monthly P&L' },
+    { id: 'backtest', label: '🧪 Backtest' },
   ];
 
   return (
@@ -59,6 +61,9 @@ export default function Analytics() {
           }}>{t.label}</button>
         ))}
       </div>
+
+      {/* ==================== BACKTEST ==================== */}
+      {tab === 'backtest' && <BacktestWidget />}
 
       {/* ==================== OVERVIEW ==================== */}
       {tab === 'overview' && (
