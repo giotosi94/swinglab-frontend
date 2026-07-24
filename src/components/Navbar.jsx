@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NAV_ITEMS } from '../utils/constants';
+import { NAV_ITEMS, API_URL } from '../utils/constants';
 import { getRegimeColor } from '../utils/helpers';
 import { fetchAllTickers } from '../utils/api';
 
@@ -10,8 +10,23 @@ export default function Navbar({
   const [allTickers, setAllTickers] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const searchRef = useRef(null);
+    const searchRef = useRef(null);
   const dropdownRef = useRef(null);
+  const [systemOnline, setSystemOnline] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch(API_URL + '/api/data/autotrader');
+        setSystemOnline(res.ok);
+      } catch {
+        setSystemOnline(false);
+      }
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, []);
 
   // Load ticker list once
   useEffect(() => {
@@ -139,6 +154,10 @@ export default function Navbar({
           }}
         >
           v4.7 · ADAPTIVE
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: systemOnline ? '#22c55e' : '#ef4444', boxShadow: systemOnline ? '0 0 8px #22c55e' : 'none' }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>{systemOnline ? 'Attivo' : 'Offline'}</span>
         </span>
         {traderData?.market?.regime && (
           <span
