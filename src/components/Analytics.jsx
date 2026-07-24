@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import * as api from '../utils/api';
 import BacktestWidget from "./BacktestWidget";
+import WinRateBreakdown from "./WinRateBreakdown";
 
 const REGIME_COLORS = {
   BULL: '#22c55e', NEUTRAL: '#eab308', BEAR: '#f97316',
@@ -46,6 +47,7 @@ export default function Analytics() {
     { id: 'breakdown', label: '🔍 Breakdown' },
     { id: 'monthly', label: '📅 Monthly P&L' },
     { id: 'backtest', label: '🧪 Backtest' },
+    { id: 'winrate', label: '🎯 Win Rate' },
   ];
 
   return (
@@ -64,6 +66,8 @@ export default function Analytics() {
 
       {/* ==================== BACKTEST ==================== */}
       {tab === 'backtest' && <BacktestWidget />}
+
+      {tab === 'winrate' && <WinRateBreakdown data={data} />}
 
       {/* ==================== OVERVIEW ==================== */}
       {tab === 'overview' && (
