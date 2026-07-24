@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { API_URL } from "../utils/constants";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+
 
 export default function BacktestWidget() {
   const [loading, setLoading] = useState(false);
@@ -95,6 +97,24 @@ export default function BacktestWidget() {
         </div>
       )}
 
+      {result?.equity_curve?.length > 1 && !result.error && (
+  <div style={{ marginTop: 16, background: "#0f172a", borderRadius: 10, padding: 14, border: "1px solid #1e293b" }}>
+    <h4 style={{ margin: "0 0 10px", fontSize: 13, color: "#94a3b8" }}>📈 Equity Curve</h4>
+    <ResponsiveContainer width="100%" height={220}>
+      <AreaChart data={result.equity_curve}>
+        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} interval="preserveStartEnd" />
+        <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => "$" + (v / 1000).toFixed(0) + "k"} />
+        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 11 }} formatter={(v) => ["$" + v.toLocaleString(), "Equity"]} />
+        <ReferenceLine y={result.config?.starting_capital ?? 100000} stroke="#64748b" strokeDasharray="4 4" />
+        <Area type="monotone" dataKey="equity" stroke="#22c55e" fill="#22c55e" fillOpacity={0.12} strokeWidth={2} />
+      </AreaChart>
+    </ResponsiveContainer>
+    <div style={{ textAlign: "center", marginTop: 6, fontSize: 10, color: "#64748b" }}>
+      ┄┄ Capitale iniziale ${((result.config?.starting_capital ?? 100000) / 1000).toFixed(0)}k
+    </div>
+  </div>
+)}
+      
       {result?.total_trades != null && !result.error && (
         <p className="text-xs text-slate-500 mt-3">
           {result.total_trades} trade simulati · config 0.4/0.7/1.0 · SPY {result.benchmark?.spy_return_pct ?? 0}% (α {result.benchmark?.alpha ?? 0}%)
