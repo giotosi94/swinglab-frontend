@@ -1,3 +1,5 @@
+export const API_URL = 'https://swinglab-backend.onrender.com';
+
 export const API =
   process.env.REACT_APP_API_URL || 'https://swinglab-backend.onrender.com';
 
