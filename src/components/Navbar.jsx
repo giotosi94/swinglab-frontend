@@ -153,7 +153,7 @@ export default function Navbar({
             letterSpacing: 0.5,
           }}
         >
-          v4.7 · ADAPTIVE
+          v5.0 · MTF+HEALTH
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: systemOnline ? '#22c55e' : '#ef4444', boxShadow: systemOnline ? '0 0 8px #22c55e' : 'none' }} />
