@@ -318,7 +318,7 @@ export default function Settings({ settings, setSettings, saveSettings, settings
           <div style={{ padding: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
               {Object.entries(settings || {}).map(([key, value]) => {
-                if (key === '_id' || key === 'starting_capital') return null;
+                if (key === '_id' || key === 'starting_capital' || key === 'active_preset') return null;
                 return (
                   <div key={key} style={{ background: '#1e293b', padding: 10, borderRadius: 6 }}>
                     <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>
