@@ -10,6 +10,7 @@ import Alpaca from './components/Alpaca';
 import Settings from './components/Settings';
 import Guide from './components/Guide';
 import Trades from './components/Trades';
+import SystemHealth from './components/SystemHealth';
 import * as api from './utils/api';
 
 function App() {
@@ -286,7 +287,7 @@ function App() {
           </div>
         )}
 
-        {loading && !['agents', 'settings', 'guide'].includes(view) ? (
+        {loading && !['agents', 'settings', 'guide', 'health'].includes(view) ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
             <div className="skeleton" style={{ width: 200, height: 20, margin: '0 auto 12px' }} />
             <div className="skeleton" style={{ width: 150, height: 14, margin: '0 auto' }} />
@@ -342,6 +343,8 @@ function App() {
             saveSettings={handleSaveSettings} settingsSaving={settingsSaving}
             alpacaData={alpacaData}
           />
+        ) : view === 'health' ? (
+          <SystemHealth />
         ) : view === 'guide' ? (
           <Guide />
         ) : null}
