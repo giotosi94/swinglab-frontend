@@ -360,7 +360,7 @@ export default function Alpaca({
                   fill={periodPnL.pnl >= 0 ? '#22c55e' : '#ef4444'} fillOpacity={0.1} strokeWidth={2} name="swinglab" />
                 {showBenchmark && spyData && (
                   <Area type="monotone" dataKey="spy" stroke="#64748b" fill="none"
-                    strokeWidth={1.5} strokeDasharray="4 4" name="spy" />
+                    strokeWidth={1.5} strokeDasharray="4 4" name="spy" connectNulls={true} />
                 )}
               </AreaChart>
             </ResponsiveContainer>
