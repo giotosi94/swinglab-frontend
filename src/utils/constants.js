@@ -45,7 +45,8 @@ export const NAV_ITEMS = [
   { id: 'alpaca',    label: '💰 Alpaca' },
   { id: 'trades',    label: '📋 Trades' },
   { id: 'settings',  label: '⚙️ Settings' },
-  { id: 'guide',     label: '📖 Guide' },
+{ id: 'health',    label: '🩺 Salute' },
+{ id: 'guide',     label: '📖 Guide' },
 ];
 
 // 🔧 v2.2 — Default settings aggiornati con APM
