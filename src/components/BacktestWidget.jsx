@@ -50,18 +50,13 @@ export default function BacktestWidget() {
       ]
     : [];
 
-  // Merge equity + SPY (entrambi in $ dallo stesso start)
-  const chartData = (() => {
-    if (!result?.equity_curve?.length) return [];
-    const startEq = result.equity_curve[0].equity;
-    const spyMap = {};
-    (bench.spy_curve || []).forEach((p) => { spyMap[p.date] = p.spy_pct; });
-    return result.equity_curve.map((e) => ({
-      date: e.date,
-      equity: e.equity,
-      spy: spyMap[e.date] != null ? Math.round(startEq * (1 + spyMap[e.date] / 100)) : null,
-    }));
-  })();
+  // Equity + SPY già allineati dal backend (campo spy_equity)
+  const chartData = (result?.equity_curve || []).map((e) => ({
+    date: e.date,
+    equity: e.equity,
+    spy: e.spy_equity ?? null,
+  }));
+
 
   return (
     <div className="bg-slate-800 rounded-xl p-5 shadow-lg border border-slate-700">
@@ -181,7 +176,7 @@ export default function BacktestWidget() {
 
       {result?.total_trades != null && !result.error && (
         <p className="text-xs text-slate-500 mt-3">
-          {result.total_trades} trade simulati · config 0.4/0.7/1.0 · SPY {bench.spy_return_pct ?? 0}% (α {bench.alpha ?? 0}%) · β {bench.beta ?? 0} · corr {bench.correlation ?? 0}
+          {result.total_trades} trade · preset {result.active_preset ?? "custom"} · {result.config?.max_positions ?? 8}pos/{result.config?.position_size_pct ?? 12}% · SPY {bench.spy_return_pct ?? 0}% (α {bench.alpha ?? 0}%) · β {bench.beta ?? 0} · corr {bench.correlation ?? 0}
         </p>
       )}
     </div>
