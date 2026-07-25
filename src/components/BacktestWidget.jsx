@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { API_URL } from "../utils/constants";
-import { AreaChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 export default function BacktestWidget() {
   const [loading, setLoading] = useState(false);
@@ -157,15 +157,15 @@ export default function BacktestWidget() {
         <div style={{ marginTop: 16, background: "#0f172a", borderRadius: 10, padding: 14, border: "1px solid #1e293b" }}>
           <h4 style={{ margin: "0 0 10px", fontSize: 13, color: "#94a3b8" }}>📈 Equity Curve vs SPY</h4>
           <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={chartData}>
+            <ComposedChart data={chartData}>
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} interval="preserveStartEnd" />
               <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => "$" + (v / 1000).toFixed(0) + "k"} />
               <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 11 }}
                 formatter={(v, name) => [v != null ? "$" + Number(v).toLocaleString() : "—", name === "equity" ? "📈 SwingLab" : "📊 SPY"]} />
               <ReferenceLine y={result.config?.starting_capital ?? 100000} stroke="#64748b" strokeDasharray="4 4" />
               <Area type="monotone" dataKey="equity" stroke="#22c55e" fill="#22c55e" fillOpacity={0.12} strokeWidth={2} name="equity" />
-              <Line type="monotone" dataKey="spy" stroke="#64748b" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="spy" connectNulls={true} />
-            </AreaChart>
+              <Line type="monotone" dataKey="spy" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 4" dot={false} name="spy" connectNulls={true} />
+            </ComposedChart>
           </ResponsiveContainer>
           <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 6 }}>
             <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 600 }}>━━ SwingLab</span>
