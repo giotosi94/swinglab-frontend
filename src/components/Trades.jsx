@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from 'recharts';
 
@@ -59,18 +59,6 @@ export default function Trades() {
   const wins = trades.filter((t) => (t.pnl_pct || 0) > 0);
   const losses = trades.filter((t) => (t.pnl_pct || 0) <= 0);
   const totalTrades = trades.length;
-  const winRate = totalTrades > 0 ? (wins.length / totalTrades) * 100 : 0;
-  const avgWin = wins.length > 0
-    ? wins.reduce((s, t) => s + (t.pnl_pct || 0), 0) / wins.length : 0;
-  const avgLoss = losses.length > 0
-    ? Math.abs(losses.reduce((s, t) => s + (t.pnl_pct || 0), 0) / losses.length) : 0;
-  const totalWinPnl = wins.reduce((s, t) => s + Math.abs(t.pnl_dollar || 0), 0);
-  const totalLossPnl = losses.reduce((s, t) => s + Math.abs(t.pnl_dollar || 0), 0);
-  const profitFactor = totalLossPnl > 0 ? totalWinPnl / totalLossPnl : totalWinPnl > 0 ? 999 : 0;
-  const totalPnlPct = trades.reduce((s, t) => s + (t.pnl_pct || 0), 0);
-  const totalPnlDollar = trades.reduce((s, t) => s + (t.pnl_dollar || 0), 0);
-  const avgDaysHeld = totalTrades > 0
-    ? trades.reduce((s, t) => s + (t.days_held || 0), 0) / totalTrades : 0;
 
   const bestTrade = trades.length > 0
     ? trades.reduce((best, t) => (t.pnl_pct || 0) > (best.pnl_pct || 0) ? t : best, trades[0])
@@ -78,31 +66,6 @@ export default function Trades() {
   const worstTrade = trades.length > 0
     ? trades.reduce((worst, t) => (t.pnl_pct || 0) < (worst.pnl_pct || 0) ? t : worst, trades[0])
     : null;
-
-  const sortedTrades = [...trades].sort(
-    (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
-  );
-  let cumPnl = 0;
-  const equityCurve = sortedTrades.map((t) => {
-    cumPnl += t.pnl_pct || 0;
-    return { date: (t.date || '').slice(0, 10), pnl: Math.round(cumPnl * 100) / 100, ticker: t.ticker };
-  });
-
-  const setupStats = {};
-  trades.forEach((t) => {
-    const key = t.setup_type || 'unknown';
-    if (!setupStats[key]) setupStats[key] = { total: 0, wins: 0, pnl: 0 };
-    setupStats[key].total++;
-    if ((t.pnl_pct || 0) > 0) setupStats[key].wins++;
-    setupStats[key].pnl += t.pnl_pct || 0;
-  });
-  const setupStatsArray = Object.entries(setupStats)
-    .map(([name, s]) => ({
-      name, total: s.total,
-      winRate: s.total > 0 ? Math.round((s.wins / s.total) * 100) : 0,
-      pnl: Math.round(s.pnl * 100) / 100,
-    }))
-    .sort((a, b) => b.winRate - a.winRate);
 
   const setupTypes = ['all', ...new Set(trades.map((t) => t.setup_type || 'unknown'))];
 
@@ -113,8 +76,6 @@ export default function Trades() {
   const sortedFiltered = [...filtered].sort(
     (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
   );
-
-  const curveColor = totalPnlPct >= 0 ? '#22c55e' : '#ef4444';
 
   if (loading) {
     return <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Loading trades...</div>;
@@ -130,7 +91,6 @@ export default function Trades() {
 
     const { params, kelly_status, current_risk_report, sizing_history, multipliers_distribution, stats } = dpsData;
 
-    // Prepare distribution chart data
     const distData = Object.entries(multipliers_distribution || {})
       .map(([mult, count]) => ({ multiplier: parseFloat(mult).toFixed(1) + 'x', count }))
       .sort((a, b) => parseFloat(a.multiplier) - parseFloat(b.multiplier));
@@ -197,7 +157,7 @@ export default function Trades() {
           <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>🎯 Sizing corrente sistema</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
             {[
-              { l: 'Position size base', v: `${current_risk_report.position_size_pct}%`, c: 'white' },
+              { l: 'Position size (post-regime)', v: `${current_risk_report.position_size_pct}%`, c: 'white' },
               { l: 'Kelly multiplier', v: `${current_risk_report.kelly_multiplier.toFixed(2)}x`, c: '#f97316' },
               { l: 'Regime multiplier', v: `${current_risk_report.final_multiplier.toFixed(2)}x`, c: '#3b82f6' },
               { l: 'Risk per trade', v: `$${current_risk_report.risk_per_trade_usd.toFixed(0)}`, c: '#eab308' },
@@ -334,24 +294,7 @@ export default function Trades() {
         renderDPSTab()
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 20 }}>
-            {[
-              { l: 'Total Trades', v: totalTrades },
-              { l: 'Win Rate', v: `${winRate.toFixed(1)}%`, c: winRate >= 50 ? '#22c55e' : '#ef4444' },
-              { l: 'Avg Win', v: `+${avgWin.toFixed(2)}%`, c: '#22c55e' },
-              { l: 'Avg Loss', v: `-${avgLoss.toFixed(2)}%`, c: '#ef4444' },
-              { l: 'Profit Factor', v: profitFactor >= 999 ? '∞' : profitFactor.toFixed(2), c: profitFactor >= 1.5 ? '#22c55e' : profitFactor >= 1 ? '#eab308' : '#ef4444' },
-              { l: 'Total P&L %', v: `${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(2)}%`, c: totalPnlPct >= 0 ? '#22c55e' : '#ef4444' },
-              { l: 'Total P&L $', v: `${totalPnlDollar >= 0 ? '+' : ''}$${totalPnlDollar.toFixed(0)}`, c: totalPnlDollar >= 0 ? '#22c55e' : '#ef4444' },
-              { l: 'Avg Days Held', v: avgDaysHeld.toFixed(1) },
-            ].map((m) => (
-              <div key={m.l} style={{ background: '#0f172a', borderRadius: 10, padding: 14, textAlign: 'center', border: '1px solid #1e293b' }}>
-                <div style={{ fontSize: 10, color: '#94a3b8' }}>{m.l}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: m.c || 'white', marginTop: 4 }}>{m.v}</div>
-              </div>
-            ))}
-          </div>
-
+          {/* Best / Worst */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
             {bestTrade && (
               <div style={{ background: '#0f172a', borderRadius: 10, padding: 14, border: '1px solid #22c55e40', borderLeft: '4px solid #22c55e' }}>
@@ -381,6 +324,7 @@ export default function Trades() {
             )}
           </div>
 
+          {/* Today */}
           {dailySummary && (
             <div style={{ background: '#0f172a', borderRadius: 10, padding: 14, marginBottom: 20, border: '1px solid #1e293b' }}>
               <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>📅 Today</h3>
@@ -401,38 +345,12 @@ export default function Trades() {
             </div>
           )}
 
-          {equityCurve.length > 1 && (
-            <div style={{ background: '#0f172a', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid #1e293b' }}>
-              <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>📈 Cumulative P&L</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={equityCurve}>
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
-                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 11 }} formatter={(v) => [`${v}%`, 'Cumulative P&L']} />
-                  <Area type="monotone" dataKey="pnl" stroke={curveColor} fill={curveColor} fillOpacity={0.1} strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+          {/* Info: metriche in Analytics */}
+          <div style={{ background: '#3b82f610', border: '1px solid #3b82f633', borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: 12, color: '#94a3b8' }}>
+            💡 Metriche complete (Win Rate, P&L reale, Profit Factor, drawdown…) nella tab <strong style={{ color: '#3b82f6' }}>📊 Analytics</strong>.
+          </div>
 
-          {setupStatsArray.length > 0 && (
-            <div style={{ background: '#0f172a', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid #1e293b' }}>
-              <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>🎯 Performance by Setup</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
-                {setupStatsArray.map((s) => (
-                  <div key={s.name} style={{ background: '#1e293b', borderRadius: 8, padding: 10, borderLeft: `3px solid ${SETUP_COLORS[s.name] || '#64748b'}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: SETUP_COLORS[s.name] || '#94a3b8', textTransform: 'capitalize', marginBottom: 4 }}>{s.name.replace(/_/g, ' ')}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                      <span style={{ color: '#94a3b8' }}>{s.total} trades</span>
-                      <span style={{ color: s.winRate >= 50 ? '#22c55e' : '#ef4444', fontWeight: 700 }}>{s.winRate}% WR</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: s.pnl >= 0 ? '#22c55e' : '#ef4444', marginTop: 2 }}>{s.pnl >= 0 ? '+' : ''}{s.pnl.toFixed(2)}%</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
+          {/* Filtri */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             {['all', 'wins', 'losses'].map((f) => (
               <button key={f} onClick={() => setFilter(f)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: filter === f ? '#3b82f6' : '#1e293b', color: filter === f ? 'white' : '#94a3b8', textTransform: 'capitalize' }}>
@@ -447,6 +365,7 @@ export default function Trades() {
             <span style={{ color: '#475569', fontSize: 11, marginLeft: 8 }}>Showing {sortedFiltered.length} trades</span>
           </div>
 
+          {/* Lista trade */}
           <div>
             {sortedFiltered.map((t, i) => {
               const pnl = t.pnl_pct || 0;
