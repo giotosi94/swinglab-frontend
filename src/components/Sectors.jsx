@@ -55,10 +55,12 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
               </div>
               <div style={{ fontSize: 9, color: '#475569', marginTop: 4 }}>
                 🕐 {s.updated_at
-                  ? new Date(s.updated_at).toLocaleString('it-IT', {
-                      day: '2-digit', month: '2-digit',
-                      hour: '2-digit', minute: '2-digit',
-                    })
+                  ? new Date(s.updated_at.endsWith('Z') ? s.updated_at : s.updated_at + 'Z')
+                      .toLocaleString('it-IT', {
+                        day: '2-digit', month: '2-digit',
+                        hour: '2-digit', minute: '2-digit',
+                        timeZone: 'Europe/Rome',
+                      })
                   : '—'}
               </div>
               {s.history && (
