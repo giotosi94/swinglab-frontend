@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { API } from "../utils/constants";
+import AlphaRadar from "./AlphaRadar";
 
 const STATUS_COLORS = { ok: "#22c55e", warning: "#eab308", critical: "#ef4444", error: "#ef4444" };
 const STATUS_EMOJI = { ok: "🟢", warning: "🟡", critical: "🔴", error: "🔴" };
@@ -63,6 +64,9 @@ export default function SystemHealth() {
 
   return (
     <div>
+      {/* 🎯 Progetto Alpha — Crash Radar + Sector Bottom */}
+      <AlphaRadar />
+
       {/* Header stato generale */}
       <div style={{
         background: `linear-gradient(135deg, ${overallColor}22 0%, #0f172a 100%)`,
