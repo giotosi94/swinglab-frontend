@@ -53,6 +53,14 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
                 {s.strength_score >= 0 ? '+' : ''}
                 {s.strength_score?.toFixed(1)}
               </div>
+              <div style={{ fontSize: 9, color: '#475569', marginTop: 4 }}>
+                🕐 {s.updated_at
+                  ? new Date(s.updated_at).toLocaleString('it-IT', {
+                      day: '2-digit', month: '2-digit',
+                      hour: '2-digit', minute: '2-digit',
+                    })
+                  : '—'}
+              </div>
               {s.history && (
                 <ResponsiveContainer width="100%" height={40}>
                   <AreaChart data={s.history.slice(-30)}>
