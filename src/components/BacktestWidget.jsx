@@ -18,6 +18,7 @@ export default function BacktestWidget() {
   const [t3, setT3] = useState(1.0);
   const [usePreset, setUsePreset] = useState(true);
   const [sectorBottom, setSectorBottom] = useState(true);
+  const [crashDeploy, setCrashDeploy] = useState(true);
 
   const runBacktest = async () => {
     setLoading(true);
@@ -32,6 +33,7 @@ export default function BacktestWidget() {
         t3_ratio: t3,
         use_preset: usePreset,
         use_sector_bottom: sectorBottom,
+        use_crash_deploy: crashDeploy,
       });
       if (!usePreset) {
         params.set("position_size_pct", sizePct);
@@ -132,6 +134,10 @@ export default function BacktestWidget() {
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#cbd5e1", cursor: "pointer" }}>
               <input type="checkbox" checked={sectorBottom} onChange={(e) => setSectorBottom(e.target.checked)} style={{ accentColor: "#f97316" }} />
               🏭 Sector Bottom
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#cbd5e1", cursor: "pointer" }}>
+              <input type="checkbox" checked={crashDeploy} onChange={(e) => setCrashDeploy(e.target.checked)} style={{ accentColor: "#ef4444" }} />
+              🔴 Crash Deploy
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#cbd5e1", cursor: "pointer" }}>
               <input type="checkbox" checked={usePreset} onChange={(e) => setUsePreset(e.target.checked)} style={{ accentColor: "#22c55e" }} />
