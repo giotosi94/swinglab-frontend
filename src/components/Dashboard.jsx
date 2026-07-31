@@ -267,64 +267,78 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* ========== SECTOR HEATMAP ========== */}
+      {/* ========== SECTOR HEATMAP + ROTATION (metodo Rea) ========== */}
       {sectors.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <h3>{'🗺️'} Sector Heatmap</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>{'🗺️'} Sector Rotation</h3>
+            <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#94a3b8' }}>
+              <span>🚀 Esplosivo</span>
+              <span>↗️ Soldi in entrata</span>
+              <span>↘️ Soldi in uscita</span>
+              <span>⚡ Compresso</span>
+            </div>
+          </div>
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
               gap: 6,
+              marginTop: 10,
             }}
           >
             {[...sectors]
-              .sort((a, b) => b.composite_score - a.composite_score)
+              // 🆕 Ordina per accelerazione momentum (chi accelera in cima)
+              .sort((a, b) => (b.momentum_accel ?? -999) - (a.momentum_accel ?? -999))
               .map((s) => {
-                const score = s.composite_score || 0;
-                const bg =
-                  score >= 70
-                    ? '#22c55e'
-                    : score >= 55
-                    ? '#16a34a'
-                    : score >= 45
-                    ? '#eab308'
-                    : score >= 35
-                    ? '#f97316'
-                    : '#ef4444';
+                const sig = s.rotation_signal || 'NEUTRAL';
+                const accel = s.momentum_accel ?? 0;
+                const compressed = (s.compression_20d ?? 1) < 0.06;
+
+                // Colore + emoji per segnale rotazione
+                const sigCfg = {
+                  EXPLOSIVE:   { bg: '#22c55e', emoji: '🚀', label: 'ESPLOSIVO' },
+                  ROTATING_IN: { bg: '#16a34a', emoji: '↗️', label: 'IN ENTRATA' },
+                  ROTATING_OUT:{ bg: '#ef4444', emoji: '↘️', label: 'IN USCITA' },
+                  NEUTRAL:     { bg: '#64748b', emoji: '➡️', label: 'NEUTRO' },
+                }[sig] || { bg: '#64748b', emoji: '➡️', label: 'NEUTRO' };
+
                 return (
                   <div
                     key={s.code}
                     onClick={() => onGoToSector(s.code)}
                     style={{
-                      background: bg + '25',
+                      background: sigCfg.bg + '20',
                       borderRadius: 8,
                       padding: 10,
                       textAlign: 'center',
                       cursor: 'pointer',
-                      border: `1px solid ${bg}40`,
+                      border: `2px solid ${sigCfg.bg}${sig === 'EXPLOSIVE' ? 'cc' : '40'}`,
+                      position: 'relative',
                     }}
                   >
-                    <div
-                      style={{ fontWeight: 700, fontSize: 13, color: bg }}
-                    >
-                      {s.code}
+                    {compressed && (
+                      <span style={{ position: 'absolute', top: 4, right: 6, fontSize: 11 }} title="Compressione bassa (molla carica)">⚡</span>
+                    )}
+                    <div style={{ fontWeight: 700, fontSize: 13, color: sigCfg.bg }}>
+                      {sigCfg.emoji} {s.code}
                     </div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>
                       {s.name?.split(' ')[0]}
                     </div>
-                    <div
-                      style={{
-                        fontSize: 16,
-                        fontWeight: 800,
-                        color: bg,
-                        marginTop: 4,
-                      }}
-                    >
-                      {score.toFixed(0)}
+                    {/* Accelerazione = il numero chiave */}
+                    <div style={{ fontSize: 16, fontWeight: 800, color: sigCfg.bg, marginTop: 4 }}>
+                      {accel >= 0 ? '+' : ''}{accel.toFixed(0)}
                     </div>
-                    <div style={{ fontSize: 10, color: '#94a3b8' }}>
-                      RSI {s.rsi || '—'}
+                    <div style={{ fontSize: 8, color: '#64748b', marginTop: 1 }}>accel</div>
+                    {/* 3M vs 6M con frecce */}
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 3 }}>
+                      3M <span style={{ color: (s.ann_3m ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{(s.ann_3m ?? 0).toFixed(0)}%</span>
+                      {' · '}
+                      6M <span style={{ color: (s.ann_6m ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{(s.ann_6m ?? 0).toFixed(0)}%</span>
+                    </div>
+                    <div style={{ fontSize: 8, color: '#475569', marginTop: 2 }}>
+                      RSI {s.rsi?.toFixed(0) || '—'} · {sigCfg.label}
                     </div>
                   </div>
                 );
