@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { API } from "../utils/constants";
 import AlphaRadar from "./AlphaRadar";
+import CrashDeployToggle from "./CrashDeployToggle";
 
 const STATUS_COLORS = { ok: "#22c55e", warning: "#eab308", critical: "#ef4444", error: "#ef4444" };
 const STATUS_EMOJI = { ok: "🟢", warning: "🟡", critical: "🔴", error: "🔴" };
@@ -66,6 +67,9 @@ export default function SystemHealth() {
     <div>
       {/* 🎯 Progetto Alpha — Crash Radar + Sector Bottom */}
       <AlphaRadar />
+
+      {/* 🔴 Crash Deploy — controllo con flag di sicurezza */}
+      <CrashDeployToggle />
 
       {/* Header stato generale */}
       <div style={{
