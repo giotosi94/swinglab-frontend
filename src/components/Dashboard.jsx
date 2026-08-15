@@ -1,438 +1,250 @@
 import React from 'react';
-import { getScoreColor, getSetupBadge, getRegimeColor } from '../utils/helpers';
+import {
+  getScoreColor,
+  getSetupBadge,
+  getRegimeColor,
+} from '../utils/helpers';
 
-/*
-  SwingLab Command Center
-  - Visual-only refactor of Dashboard.jsx
-  - No new dependencies
-  - Keeps existing props, callbacks and data contracts
-  - Charts are built with native SVG/CSS using the data already available
-*/
+/* =========================================================
+   MARKET INFORMATION
+   ========================================================= */
 
-const C = {
-  bg: '#060b16',
-  panel: '#0b1220',
-  panel2: '#0f1728',
-  border: '#1b2940',
-  text: '#f8fafc',
-  muted: '#718096',
-  green: '#22c55e',
-  red: '#ef4444',
-  amber: '#f59e0b',
-  blue: '#38bdf8',
-  purple: '#a78bfa',
+const MARKET_INFO = {
+  SPY: {
+    name: 'S&P 500 ETF',
+    category: 'US EQUITY',
+    icon: '🇺🇸',
+  },
+  QQQ: {
+    name: 'Nasdaq-100 ETF',
+    category: 'US EQUITY',
+    icon: '💻',
+  },
+  IWM: {
+    name: 'Russell 2000 ETF',
+    category: 'SMALL CAP',
+    icon: '🏢',
+  },
+  DIA: {
+    name: 'Dow Jones ETF',
+    category: 'US EQUITY',
+    icon: '🏛️',
+  },
+  VIXY: {
+    name: 'VIX Short-Term Futures',
+    category: 'VOLATILITY',
+    icon: '⚡',
+  },
+  TLT: {
+    name: '20+ Year Treasury Bond',
+    category: 'BONDS',
+    icon: '🏦',
+  },
+  UUP: {
+    name: 'US Dollar ETF',
+    category: 'CURRENCY',
+    icon: '💵',
+  },
+  FXE: {
+    name: 'Euro Currency ETF',
+    category: 'CURRENCY',
+    icon: '💶',
+  },
 };
 
-function LogoMark() {
+const getMarketInfo = (symbol, data) =>
+  MARKET_INFO[symbol] || {
+    name: data?.name || 'Market Asset',
+    category: 'MARKET',
+    icon: '📊',
+  };
+
+/* =========================================================
+   SMALL UI COMPONENTS
+   ========================================================= */
+
+function SectionHeader({ eyebrow, title, right }) {
   return (
-    <div className="sl-logo">
-      <svg viewBox="0 0 40 40" width="34" height="34">
-        <defs>
-          <linearGradient id="slg" x1="0" x2="1">
-            <stop offset="0" stopColor="#38bdf8" />
-            <stop offset="1" stopColor="#a78bfa" />
-          </linearGradient>
-        </defs>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        marginBottom: 12,
+      }}
+    >
+      <div>
+        {eyebrow && (
+          <div
+            style={{
+              fontSize: 9,
+              color: '#64748b',
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              marginBottom: 3,
+            }}
+          >
+            {eyebrow}
+          </div>
+        )}
 
-        <circle
-          cx="20"
-          cy="20"
-          r="18"
-          fill="#0f1728"
-          stroke="url(#slg)"
-          strokeWidth="2"
-        />
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 18,
+            fontWeight: 800,
+            color: '#f8fafc',
+          }}
+        >
+          {title}
+        </h3>
+      </div>
 
-        <path
-          d="M8 25 C12 13, 17 29, 21 18 S29 12, 33 8"
-          fill="none"
-          stroke="url(#slg)"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-
-        <circle
-          cx="30"
-          cy="11"
-          r="2.5"
-          fill="#22c55e"
-        />
-      </svg>
+      {right && (
+        <div
+          style={{
+            fontSize: 9,
+            color: '#475569',
+          }}
+        >
+          {right}
+        </div>
+      )}
     </div>
   );
 }
 
-function Card({ children, className = '', onClick }) {
+function DashboardCard({ children, onClick, style = {} }) {
   return (
     <div
-      className={`sl-card ${className}`}
       onClick={onClick}
+      style={{
+        background:
+          'linear-gradient(145deg, #0f172a 0%, #0b1220 100%)',
+        border: '1px solid #1e293b',
+        borderRadius: 14,
+        padding: 15,
+        cursor: onClick ? 'pointer' : 'default',
+        boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
+        ...style,
+      }}
     >
       {children}
     </div>
   );
 }
 
-function SectionTitle({ eyebrow, title, right }) {
-  return (
-    <div className="sl-section-title">
-      <div>
-        {eyebrow && (
-          <div className="sl-eyebrow">
-            {eyebrow}
-          </div>
-        )}
+function Gauge({ value = 0, label, color }) {
+  const radius = 31;
+  const circumference = 2 * Math.PI * radius;
+  const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
 
-        <div className="sl-title">
-          {title}
+  const offset =
+    circumference - (safeValue / 100) * circumference;
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        textAlign: 'center',
+      }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          width: 78,
+          height: 78,
+          margin: '0 auto 7px',
+        }}
+      >
+        <svg
+          width="78"
+          height="78"
+          viewBox="0 0 78 78"
+        >
+          <circle
+            cx="39"
+            cy="39"
+            r={radius}
+            fill="none"
+            stroke="#172235"
+            strokeWidth="7"
+          />
+
+          <circle
+            cx="39"
+            cy="39"
+            r={radius}
+            fill="none"
+            stroke={color}
+            strokeWidth="7"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            transform="rotate(-90 39 39)"
+          />
+        </svg>
+
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 16,
+            fontWeight: 800,
+            color: '#f8fafc',
+          }}
+        >
+          {Math.round(safeValue)}%
         </div>
       </div>
 
-      {right}
-    </div>
-  );
-}
-
-function Gauge({
-  value = 0,
-  color = C.blue,
-  label,
-  suffix = '%',
-}) {
-  const v = Math.max(
-    0,
-    Math.min(100, Number(value) || 0)
-  );
-
-  const r = 34;
-  const circ = 2 * Math.PI * r;
-  const dash = circ * (v / 100);
-
-  return (
-    <div className="sl-gauge">
-      <svg viewBox="0 0 84 84">
-        <circle
-          cx="42"
-          cy="42"
-          r={r}
-          fill="none"
-          stroke="#182338"
-          strokeWidth="8"
-        />
-
-        <circle
-          cx="42"
-          cy="42"
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="8"
-          strokeLinecap="round"
-          strokeDasharray={`${dash} ${circ - dash}`}
-          transform="rotate(-90 42 42)"
-        />
-      </svg>
-
-      <div className="sl-gauge-value">
-        {v}{suffix}
-      </div>
-
-      <div className="sl-gauge-label">
+      <div
+        style={{
+          fontSize: 9,
+          color: '#64748b',
+          textTransform: 'uppercase',
+          letterSpacing: 1,
+        }}
+      >
         {label}
       </div>
     </div>
   );
 }
 
-function PulseBars({ entries }) {
-  const rows = entries
-    .map(([symbol, data]) => ({
-      symbol,
-      change: Number(data?.change_pct ?? 0),
-    }))
-    .slice(0, 8);
-
-  const max = Math.max(
-    1,
-    ...rows.map(x => Math.abs(x.change))
-  );
-
-  return (
-    <div className="sl-pulse">
-      {rows.map((r) => {
-        const positive = r.change >= 0;
-
-        const width = Math.max(
-          5,
-          (Math.abs(r.change) / max) * 100
-        );
-
-        return (
-          <div
-            className="sl-pulse-row"
-            key={r.symbol}
-          >
-            <span className="sl-pulse-symbol">
-              {r.symbol}
-            </span>
-
-            <div className="sl-pulse-track">
-              <div
-                className={`sl-pulse-bar ${
-                  positive ? 'up' : 'down'
-                }`}
-                style={{
-                  width: `${width}%`,
-                }}
-              />
-            </div>
-
-            <span
-              className={
-                positive ? 'sl-up' : 'sl-down'
-              }
-            >
-              {positive ? '+' : ''}
-              {r.change.toFixed(2)}%
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SectorChart({
-  sectors,
-  onGoToSector,
-}) {
-  const data = [...(sectors || [])]
-    .sort(
-      (a, b) =>
-        (b.momentum_accel ?? -999) -
-        (a.momentum_accel ?? -999)
-    )
-    .slice(0, 10);
-
-  if (!data.length) return null;
-
-  const max = Math.max(
-    1,
-    ...data.map(s =>
-      Math.abs(
-        Number(s.momentum_accel ?? 0)
-      )
-    )
-  );
-
-  return (
-    <div className="sl-sector-chart">
-      {data.map((s) => {
-        const signal =
-          s.rotation_signal || 'NEUTRAL';
-
-        const color =
-          signal === 'EXPLOSIVE'
-            ? C.green
-            : signal === 'ROTATING_IN'
-            ? '#16a34a'
-            : signal === 'ROTATING_OUT'
-            ? C.red
-            : '#64748b';
-
-        const accel = Number(
-          s.momentum_accel ?? 0
-        );
-
-        const width = Math.max(
-          3,
-          (Math.abs(accel) / max) * 100
-        );
-
-        return (
-          <div
-            className="sl-sector-row"
-            key={s.code}
-            onClick={() =>
-              onGoToSector(s.code)
-            }
-          >
-            <div className="sl-sector-name">
-              <b>{s.code}</b>
-
-              <span>
-                {s.name?.split(' ')[0] ||
-                  signal}
-              </span>
-            </div>
-
-            <div className="sl-sector-track">
-              <div
-                className="sl-sector-bar"
-                style={{
-                  width: `${width}%`,
-                  background: color,
-                  boxShadow: `0 0 14px ${color}55`,
-                }}
-              />
-            </div>
-
-            <div
-              className="sl-sector-value"
-              style={{ color }}
-            >
-              {accel >= 0 ? '+' : ''}
-              {accel.toFixed(0)}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SetupRow({
-  asset,
-  index,
-  livePrices,
-  mlPredictions,
-  trendPredictions,
-  onLoadFullStock,
-}) {
-  const live =
-    livePrices?.[asset.ticker];
-
-  const price =
-    live?.price ?? asset.price;
-
-  const change =
-    live?.change_pct ??
-    asset.change_pct;
-
-  const ml =
-    mlPredictions?.[asset.ticker];
-
-  const trend =
-    trendPredictions?.[asset.ticker];
+function MomentumBar({ value }) {
+  const numericValue = Number(value) || 0;
+  const width = Math.min(Math.abs(numericValue), 100);
+  const positive = numericValue >= 0;
 
   return (
     <div
-      className="sl-setup-row"
-      onClick={() =>
-        onLoadFullStock(asset.ticker)
-      }
+      style={{
+        height: 5,
+        background: '#172235',
+        borderRadius: 10,
+        overflow: 'hidden',
+        flex: 1,
+      }}
     >
-      <div className="sl-rank">
-        {String(index + 1).padStart(2, '0')}
-      </div>
-
-      <div className="sl-setup-main">
-        <div className="sl-setup-name">
-          <b>{asset.ticker}</b>
-
-          <span>
-            {asset.sector_code || '—'}
-          </span>
-        </div>
-
-        <div className="sl-score-track">
-          <div
-            className="sl-score-fill"
-            style={{
-              width: `${Math.max(
-                0,
-                Math.min(
-                  100,
-                  Number(
-                    asset.setup_score
-                  ) || 0
-                )
-              )}%`,
-              background:
-                getScoreColor(
-                  asset.setup_score
-                ),
-            }}
-          />
-        </div>
-      </div>
-
       <div
-        className="sl-score-number"
         style={{
-          color:
-            getScoreColor(
-              asset.setup_score
-            ),
+          height: '100%',
+          width: `${width}%`,
+          background: positive ? '#22c55e' : '#ef4444',
+          borderRadius: 10,
         }}
-      >
-        {asset.setup_score}
-      </div>
-
-      <div className="sl-price">
-        <b>
-          {price != null
-            ? `$${price}`
-            : '—'}
-        </b>
-
-        <span
-          className={
-            Number(change ?? 0) >= 0
-              ? 'sl-up'
-              : 'sl-down'
-          }
-        >
-          {Number(change ?? 0) >= 0
-            ? '+'
-            : ''}
-
-          {change != null
-            ? Number(change).toFixed(2)
-            : '—'}
-          %
-        </span>
-      </div>
-
-      <div className="sl-tags">
-        {getSetupBadge(
-          asset.setup_type
-        )}
-
-        {ml && (
-          <span
-            className={`sl-tag ${
-              ml.prediction === 'WIN'
-                ? 'green'
-                : 'red'
-            }`}
-          >
-            🧠 {ml.ml_score}%
-          </span>
-        )}
-
-        {trend && (
-          <span
-            className={`sl-tag ${
-              trend.prediction === 'UP'
-                ? 'green'
-                : trend.prediction === 'DOWN'
-                ? 'red'
-                : 'amber'
-            }`}
-          >
-            {trend.prediction === 'UP'
-              ? '↗'
-              : trend.prediction === 'DOWN'
-              ? '↘'
-              : '→'}{' '}
-            {trend.up_prob}%
-          </span>
-        )}
-      </div>
+      />
     </div>
   );
 }
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
 
 export default function Dashboard({
   marketData,
@@ -449,1352 +261,1417 @@ export default function Dashboard({
   mlPredictions,
   trendPredictions,
 }) {
-  const ps =
-    agentsStatus?.pipeline_state;
+  const getLivePrice = (ticker) =>
+    livePrices?.[ticker] || null;
 
-  const market =
-    ps?.market || {};
-
-  const actions =
-    ps?.actions || [];
-
-  const topSetups = [
-    ...(assets || []),
-  ]
-    .filter(a => a?.ticker)
+  const topSetups = [...(assets || [])]
     .sort(
       (a, b) =>
-        (b.setup_score ?? 0) -
-        (a.setup_score ?? 0)
+        (b.setup_score || 0) -
+        (a.setup_score || 0)
+    )
+    .slice(0, 12);
+
+  const sortedSectors = [...(sectors || [])]
+    .sort(
+      (a, b) =>
+        (b.momentum_accel ?? -999) -
+        (a.momentum_accel ?? -999)
     );
 
-  const marketEntries =
-    Object.entries(
-      marketData || {}
-    );
+  const ps = agentsStatus?.pipeline_state;
+  const market = ps?.market || {};
+  const lastActions = ps?.actions || [];
 
-  const confidence =
-    Number(
-      market.confidence || 0
-    );
+  const confidence = Number(
+    market.confidence || 0
+  );
 
   const exposure =
-    Number(
-      market.exposure_multiplier || 0
-    ) * 100;
+    Number(market.exposure_multiplier || 0) *
+    100;
 
-  const lastRun =
-    ps?.last_run
-      ? new Date(
-          ps.last_run +
-            (
-              ps.last_run.endsWith('Z')
-                ? ''
-                : 'Z'
-            )
-        ).toLocaleString()
-      : 'Never';
+  const regime = market.regime || 'NEUTRAL';
 
   const regimeColor =
-    market.regime
-      ? getRegimeColor(
-          market.regime
-        )
-      : C.muted;
+    getRegimeColor(regime);
 
   return (
-    <div className="sl-dashboard">
-
-      <style>{`
-
-        .sl-dashboard {
-          --sl-bg: #060b16;
-          --sl-panel: #0b1220;
-          --sl-panel2: #0f1728;
-          --sl-border: #1b2940;
-
-          color: ${C.text};
-
-          padding:
-            6px 0 40px;
-
-          font-family: inherit;
-        }
-
-        .sl-dashboard * {
-          box-sizing: border-box;
-        }
-
-        .sl-card {
-          background:
-            linear-gradient(
-              145deg,
-              #0d1626,
-              #09111e
-            );
-
-          border:
-            1px solid
-            var(--sl-border);
-
-          border-radius: 16px;
-
-          position: relative;
-
-          overflow: hidden;
-        }
-
-        .sl-card::after {
-          content: '';
-
-          position: absolute;
-
-          inset: 0;
-
-          pointer-events: none;
-
-          background:
-            radial-gradient(
-              circle at 90% 0%,
-              rgba(56,189,248,.07),
-              transparent 30%
-            );
-        }
-
-        .sl-card.clickable,
-        .sl-setup-row,
-        .sl-sector-row {
-          cursor: pointer;
-        }
-
-        .sl-hero {
-          display: grid;
-
-          grid-template-columns:
-            minmax(0, 1.55fr)
-            minmax(290px, .8fr);
-
-          gap: 14px;
-
-          margin-bottom: 14px;
-        }
-
-        .sl-hero-main {
-          padding: 22px;
-
-          min-height: 220px;
-
-          background:
-            radial-gradient(
-              circle at 82% 18%,
-              rgba(56,189,248,.12),
-              transparent 28%
-            ),
-            radial-gradient(
-              circle at 70% 90%,
-              rgba(167,139,250,.09),
-              transparent 30%
-            ),
-            linear-gradient(
-              145deg,
-              #0e192c,
-              #080f1c
-            );
-        }
-
-        .sl-brand {
-          display:flex;
-
-          align-items:center;
-
-          gap:10px;
-        }
-
-        .sl-logo {
-          width:38px;
-          height:38px;
-        }
-
-        .sl-brand-name {
-          font-size:18px;
-
-          font-weight:900;
-
-          letter-spacing:-.5px;
-        }
-
-        .sl-brand-sub {
-          color:#64748b;
-
-          font-size:9px;
-
-          margin-top:2px;
-        }
-
-        .sl-live {
-          display:inline-flex;
-
-          align-items:center;
-
-          gap:5px;
-
-          margin-left:7px;
-
-          padding:
-            4px 7px;
-
-          border-radius:99px;
-
-          font-size:8px;
-
-          font-weight:800;
-
-          color:#22c55e;
-
-          background:#22c55e12;
-
-          border:
-            1px solid
-            #22c55e35;
-        }
-
-        .sl-live i {
-          width:5px;
-          height:5px;
-
-          border-radius:50%;
-
-          background:#22c55e;
-
-          box-shadow:
-            0 0 8px
-            #22c55e;
-        }
-
-        .sl-hero-grid {
-          display:grid;
-
-          grid-template-columns:
-            1fr 1fr 1fr;
-
-          gap:10px;
-
-          margin-top:28px;
-        }
-
-        .sl-hero-metric {
-          padding:12px;
-
-          background:#0a1322;
-
-          border:
-            1px solid
-            #18253a;
-
-          border-radius:11px;
-        }
-
-        .sl-hero-label,
-        .sl-eyebrow {
-          font-size:8px;
-
-          text-transform:uppercase;
-
-          letter-spacing:1px;
-
-          color:#64748b;
-
-          font-weight:800;
-        }
-
-        .sl-hero-value {
-          font-size:20px;
-
-          font-weight:900;
-
-          margin-top:5px;
-        }
-
-        .sl-hero-note {
-          font-size:8px;
-
-          color:#475569;
-
-          margin-top:3px;
-        }
-
-        .sl-hero-side {
-          padding:18px;
-
-          display:flex;
-
-          flex-direction:column;
-        }
-
-        .sl-side-title {
-          font-size:12px;
-
-          font-weight:800;
-        }
-
-        .sl-side-sub {
-          font-size:8px;
-
-          color:#64748b;
-
-          margin-top:3px;
-        }
-
-        .sl-gauges {
-          display:flex;
-
-          justify-content:space-around;
-
-          align-items:center;
-
-          flex:1;
-
-          margin-top:8px;
-        }
-
-        .sl-gauge {
-          width:105px;
-
-          text-align:center;
-
-          position:relative;
-        }
-
-        .sl-gauge svg {
-          width:84px;
-          height:84px;
-        }
-
-        .sl-gauge-value {
-          position:absolute;
-
-          left:0;
-          right:0;
-
-          top:30px;
-
-          font-size:13px;
-
-          font-weight:900;
-        }
-
-        .sl-gauge-label {
-          margin-top:-4px;
-
-          font-size:8px;
-
-          color:#64748b;
-
-          text-transform:uppercase;
-        }
-
-        .sl-grid-2 {
-          display:grid;
-
-          grid-template-columns:
-            minmax(0,1.2fr)
-            minmax(0,.8fr);
-
-          gap:14px;
-
-          margin-bottom:14px;
-        }
-
-        .sl-panel-pad {
-          padding:16px;
-        }
-
-        .sl-section-title {
-          display:flex;
-
-          justify-content:space-between;
-
-          align-items:flex-end;
-
-          gap:10px;
-
-          margin-bottom:12px;
-        }
-
-        .sl-title {
-          font-size:13px;
-
-          font-weight:900;
-
-          margin-top:2px;
-        }
-
-        .sl-section-note {
-          font-size:8px;
-
-          color:#475569;
-        }
-
-        .sl-pulse {
-          display:flex;
-
-          flex-direction:column;
-
-          gap:8px;
-        }
-
-        .sl-pulse-row {
-          display:grid;
-
-          grid-template-columns:
-            55px 1fr 55px;
-
-          align-items:center;
-
-          gap:8px;
-
-          font-size:9px;
-        }
-
-        .sl-pulse-symbol {
-          font-weight:800;
-
-          color:#cbd5e1;
-        }
-
-        .sl-pulse-track,
-        .sl-score-track,
-        .sl-sector-track {
-          height:7px;
-
-          background:#111c30;
-
-          border-radius:99px;
-
-          overflow:hidden;
-        }
-
-        .sl-pulse-bar {
-          height:100%;
-
-          border-radius:99px;
-        }
-
-        .sl-pulse-bar.up {
-          background:
-            linear-gradient(
-              90deg,
-              #16a34a,
-              #22c55e
-            );
-        }
-
-        .sl-pulse-bar.down {
-          background:
-            linear-gradient(
-              90deg,
-              #ef4444,
-              #b91c1c
-            );
-        }
-
-        .sl-up {
-          color:#22c55e;
-        }
-
-        .sl-down {
-          color:#ef4444;
-        }
-
-        .sl-account {
-          display:grid;
-
-          grid-template-columns:
-            repeat(4,1fr);
-
-          gap:8px;
-        }
-
-        .sl-account-box {
-          padding:11px;
-
-          background:#0a1322;
-
-          border:
-            1px solid
-            #18253a;
-
-          border-radius:10px;
-        }
-
-        .sl-account-box span {
-          display:block;
-
-          color:#64748b;
-
-          font-size:8px;
-
-          text-transform:uppercase;
-        }
-
-        .sl-account-box b {
-          display:block;
-
-          font-size:15px;
-
-          margin-top:5px;
-        }
-
-        .sl-position-row {
-          display:flex;
-
-          gap:6px;
-
-          flex-wrap:wrap;
-
-          margin-top:9px;
-        }
-
-        .sl-position {
-          background:#111c30;
-
-          border:
-            1px solid
-            #18253a;
-
-          border-radius:7px;
-
-          padding:5px 7px;
-
-          font-size:8px;
-        }
-
-        .sl-position b {
-          color:#f8fafc;
-        }
-
-        .sl-position span {
-          margin-left:5px;
-        }
-
-        .sl-sector-chart {
-          display:flex;
-
-          flex-direction:column;
-
-          gap:8px;
-        }
-
-        .sl-sector-row {
-          display:grid;
-
-          grid-template-columns:
-            82px 1fr 38px;
-
-          align-items:center;
-
-          gap:9px;
-        }
-
-        .sl-sector-name b {
-          display:block;
-
-          font-size:9px;
-        }
-
-        .sl-sector-name span {
-          display:block;
-
-          color:#475569;
-
-          font-size:7px;
-
-          margin-top:2px;
-        }
-
-        .sl-sector-value {
-          text-align:right;
-
-          font-size:10px;
-
-          font-weight:900;
-        }
-
-        .sl-sector-bar {
-          height:100%;
-
-          border-radius:99px;
-        }
-
-        .sl-setups {
-          margin-bottom:14px;
-        }
-
-        .sl-setup-list {
-          display:flex;
-
-          flex-direction:column;
-
-          gap:6px;
-        }
-
-        .sl-setup-row {
-          display:grid;
-
-          grid-template-columns:
-            32px
-            minmax(130px,1fr)
-            45px
-            75px
-            minmax(150px,.8fr);
-
-          gap:10px;
-
-          align-items:center;
-
-          padding:10px 11px;
-
-          border:
-            1px solid
-            #17243a;
-
-          border-radius:10px;
-
-          background:
-            linear-gradient(
-              90deg,
-              #0b1423,
-              #0c1627
-            );
-
-          transition:.15s;
-        }
-
-        .sl-setup-row:hover {
-          border-color:#2b4668;
-
-          transform:
-            translateY(-1px);
-        }
-
-        .sl-rank {
-          color:#475569;
-
-          font-size:9px;
-
-          font-weight:900;
-        }
-
-        .sl-setup-name {
-          display:flex;
-
-          gap:7px;
-
-          align-items:baseline;
-
-          margin-bottom:6px;
-        }
-
-        .sl-setup-name b {
-          font-size:11px;
-        }
-
-        .sl-setup-name span {
-          color:#64748b;
-
-          font-size:7px;
-        }
-
-        .sl-score-fill {
-          height:100%;
-
-          border-radius:99px;
-        }
-
-        .sl-score-number {
-          font-size:15px;
-
-          font-weight:900;
-        }
-
-        .sl-price {
-          text-align:right;
-        }
-
-        .sl-price b {
-          display:block;
-
-          font-size:10px;
-        }
-
-        .sl-price span {
-          display:block;
-
-          font-size:8px;
-
-          margin-top:2px;
-        }
-
-        .sl-tags {
-          display:flex;
-
-          justify-content:flex-end;
-
-          gap:4px;
-
-          flex-wrap:wrap;
-        }
-
-        .sl-tag {
-          padding:3px 5px;
-
-          border-radius:5px;
-
-          font-size:7px;
-
-          font-weight:800;
-
-          border:
-            1px solid
-            transparent;
-        }
-
-        .sl-tag.green {
-          color:#22c55e;
-
-          background:#22c55e12;
-
-          border-color:#22c55e25;
-        }
-
-        .sl-tag.red {
-          color:#ef4444;
-
-          background:#ef444412;
-
-          border-color:#ef444425;
-        }
-
-        .sl-tag.amber {
-          color:#f59e0b;
-
-          background:#f59e0b12;
-
-          border-color:#f59e0b25;
-        }
-
-        .sl-agent-list {
-          display:grid;
-
-          grid-template-columns:
-            repeat(3,1fr);
-
-          gap:7px;
-        }
-
-        .sl-agent {
-          padding:10px;
-
-          background:#0a1322;
-
-          border:
-            1px solid
-            #18253a;
-
-          border-radius:9px;
-
-          display:flex;
-
-          justify-content:space-between;
-
-          align-items:center;
-        }
-
-        .sl-agent b {
-          font-size:9px;
-        }
-
-        .sl-agent span {
-          font-size:8px;
-
-          color:#64748b;
-        }
-
-        .sl-empty {
-          text-align:center;
-
-          padding:20px;
-
-          color:#475569;
-
-          font-size:10px;
-        }
-
-        @media (max-width: 850px) {
-
-          .sl-hero,
-          .sl-grid-2 {
-            grid-template-columns:1fr;
-          }
-
-          .sl-setup-row {
-            grid-template-columns:
-              26px 1fr 40px;
-          }
-
-          .sl-price {
-            text-align:right;
-          }
-
-          .sl-tags {
-            grid-column:2 / -1;
-
-            justify-content:flex-start;
-          }
-        }
-
-        @media (max-width: 520px) {
-
-          .sl-dashboard {
-            padding-left:2px;
-            padding-right:2px;
-          }
-
-          .sl-hero-main {
-            padding:15px;
-
-            min-height:0;
-          }
-
-          .sl-hero-grid {
-            margin-top:18px;
-
-            grid-template-columns:
-              1fr 1fr;
-          }
-
-          .sl-hero-grid
-          .sl-hero-metric:last-child {
-            grid-column:
-              1 / -1;
-          }
-
-          .sl-hero-side,
-          .sl-panel-pad {
-            padding:13px;
-          }
-
-          .sl-account {
-            grid-template-columns:
-              1fr 1fr;
-          }
-
-          .sl-setup-row {
-            grid-template-columns:
-              25px 1fr 42px;
-
-            padding:9px;
-          }
-
-          .sl-setup-row
-          .sl-price {
-            display:none;
-          }
-
-          .sl-tags {
-            grid-column:
-              2 / -1;
-          }
-
-          .sl-agent-list {
-            grid-template-columns:1fr;
-          }
-
-          .sl-sector-row {
-            grid-template-columns:
-              68px 1fr 32px;
-          }
-        }
-
-      `}</style>
-
+    <div
+      style={{
+        minHeight: '100%',
+        background: '#050914',
+        color: '#f8fafc',
+        paddingBottom: 40,
+      }}
+    >
       {/* =====================================================
-          HERO / COMMAND CENTER
+          HERO / SYSTEM STATUS
       ===================================================== */}
 
-      <div className="sl-hero">
-
-        <Card className="sl-hero-main">
-
-          <div className="sl-brand">
-
-            <LogoMark />
-
-            <div>
-
-              <div className="sl-brand-name">
-
-                SwingLab
-
-                <span className="sl-live">
-                  <i />
-                  LIVE
-                </span>
-
-              </div>
-
-              <div className="sl-brand-sub">
-                MARKET INTELLIGENCE COMMAND CENTER
-              </div>
-
-            </div>
-
-          </div>
-
-          <div className="sl-hero-grid">
-
-            <div className="sl-hero-metric">
-
-              <div className="sl-hero-label">
-                Market regime
-              </div>
-
-              <div
-                className="sl-hero-value"
-                style={{
-                  color: regimeColor,
-                }}
-              >
-                {market.regime || '—'}
-              </div>
-
-              <div className="sl-hero-note">
-                Agent consensus
-              </div>
-
-            </div>
-
-            <div className="sl-hero-metric">
-
-              <div className="sl-hero-label">
-                Volatility
-              </div>
-
-              <div
-                className="sl-hero-value"
-                style={{
-                  color:
-                    market.volatility === 'EXTREME'
-                      ? C.red
-                      : market.volatility === 'HIGH'
-                      ? C.amber
-                      : C.green,
-                }}
-              >
-                {market.volatility || '—'}
-              </div>
-
-              <div className="sl-hero-note">
-                Risk environment
-              </div>
-
-            </div>
-
-            <div className="sl-hero-metric">
-
-              <div className="sl-hero-label">
-                Pipeline
-              </div>
-
-              <div
-                className="sl-hero-value"
-                style={{
-                  color: C.green,
-                }}
-              >
-                ●
-              </div>
-
-              <div className="sl-hero-note">
-                {lastRun}
-              </div>
-
-            </div>
-
-          </div>
-
-        </Card>
-
-        <Card className="sl-hero-side">
-
-          <div>
-
-            <div className="sl-side-title">
-              Risk & Exposure
-            </div>
-
-            <div className="sl-side-sub">
-              Current agent controls
-            </div>
-
-          </div>
-
-          <div className="sl-gauges">
-
-            <Gauge
-              value={confidence}
-              color={C.blue}
-              label="Confidence"
-            />
-
-            <Gauge
-              value={exposure}
-              color={
-                exposure > 70
-                  ? C.amber
-                  : C.green
-              }
-              label="Exposure"
-            />
-
-          </div>
-
-        </Card>
-
-      </div>
-
-      {/* =====================================================
-          PORTFOLIO + MARKET PULSE
-      ===================================================== */}
-
-      <div className="sl-grid-2">
-
-        <Card
-          className="sl-panel-pad clickable"
-          onClick={onGoToAlpaca}
-        >
-
-          <SectionTitle
-            eyebrow="ACCOUNT"
-            title="Portfolio"
-            right={
-              <span className="sl-section-note">
-                Open Alpaca →
-              </span>
-            }
-          />
-
-          {alpacaData ? (
-            <>
-
-              <div className="sl-account">
-
-                {[
-                  [
-                    'Equity',
-                    `${
-                      alpacaData.equity?.toLocaleString()
-                      ?? '—'
-                    }`,
-                  ],
-
-                  [
-                    'Cash',
-                    `${
-                      alpacaData.cash?.toLocaleString()
-                      ?? '—'
-                    }`,
-                  ],
-
-                  [
-                    'Daily P&L',
-                    `${
-                      alpacaData.daily_pnl >= 0
-                        ? '+'
-                        : ''
-                    }${
-                      alpacaData.daily_pnl?.toLocaleString()
-                      ?? '—'
-                    }`,
-                  ],
-
-                  [
-                    'Positions',
-                    alpacaData.positions?.length || 0,
-                  ],
-                ].map(
-                  ([label, value]) => (
-
-                    <div
-                      className="sl-account-box"
-                      key={label}
-                    >
-
-                      <span>
-                        {label}
-                      </span>
-
-                      <b
-                        style={
-                          label === 'Daily P&L'
-                            ? {
-                                color:
-                                  alpacaData.daily_pnl >= 0
-                                    ? C.green
-                                    : C.red,
-                              }
-                            : {}
-                        }
-                      >
-                        {value}
-                      </b>
-
-                    </div>
-
-                  )
-                )}
-
-              </div>
-
-              {alpacaData.positions?.length > 0 && (
-
-                <div className="sl-position-row">
-
-                  {alpacaData.positions
-                    .slice(0, 6)
-                    .map(p => (
-
-                      <div
-                        className="sl-position"
-                        key={p.symbol}
-                      >
-
-                        <b>
-                          {p.symbol}
-                        </b>
-
-                        <span
-                          className={
-                            p.pnl_pct >= 0
-                              ? 'sl-up'
-                              : 'sl-down'
-                          }
-                        >
-                          {p.pnl_pct >= 0
-                            ? '+'
-                            : ''}
-
-                          {p.pnl_pct?.toFixed(2)}%
-                        </span>
-
-                      </div>
-
-                    ))}
-
-                </div>
-
-              )}
-
-            </>
-          ) : (
-
-            <div className="sl-empty">
-              Connecting to Alpaca…
-            </div>
-
-          )}
-
-        </Card>
-
-        <Card className="sl-panel-pad">
-
-          <SectionTitle
-            eyebrow="LIVE TAPE"
-            title="Market Pulse"
-            right={
-              <span className="sl-section-note">
-                change %
-              </span>
-            }
-          />
-
-          {marketEntries.length ? (
-
-            <PulseBars
-              entries={marketEntries}
-            />
-
-          ) : (
-
-            <div className="sl-empty">
-              No market data.
-            </div>
-
-          )}
-
-        </Card>
-
-      </div>
-
-      {/* =====================================================
-          SECTOR ROTATION
-      ===================================================== */}
-
-      {sectors?.length > 0 && (
-
-        <Card
-          className="sl-panel-pad"
+      <DashboardCard
+        style={{
+          marginBottom: 16,
+          padding: 18,
+          background:
+            'radial-gradient(circle at 85% 15%, rgba(56,189,248,.12), transparent 30%), linear-gradient(145deg,#0d1729,#070c17)',
+        }}
+      >
+        <div
           style={{
-            marginBottom: 14,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 18,
           }}
         >
-
-          <SectionTitle
-            eyebrow="ROTATION ENGINE"
-            title="Sector Momentum Radar"
-            right={
-              <span className="sl-section-note">
-                ranked by acceleration
+          <div>
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 900,
+                letterSpacing: -0.8,
+              }}
+            >
+              Swing
+              <span style={{ color: '#38bdf8' }}>
+                Lab
               </span>
-            }
+            </div>
+
+            <div
+              style={{
+                fontSize: 8,
+                color: '#64748b',
+                letterSpacing: 1.8,
+                textTransform: 'uppercase',
+                marginTop: 2,
+              }}
+            >
+              Market Intelligence Center
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 9px',
+              borderRadius: 20,
+              background:
+                'rgba(34,197,94,.08)',
+              border:
+                '1px solid rgba(34,197,94,.2)',
+              color: '#22c55e',
+              fontSize: 9,
+              fontWeight: 800,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: '#22c55e',
+                boxShadow:
+                  '0 0 8px rgba(34,197,94,.8)',
+              }}
+            />
+
+            LIVE
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(3, 1fr)',
+            gap: 8,
+          }}
+        >
+          {/* Regime */}
+          <div
+            style={{
+              background: '#0b1220',
+              border: '1px solid #18243a',
+              borderRadius: 10,
+              padding: 11,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 8,
+                color: '#64748b',
+                textTransform: 'uppercase',
+              }}
+            >
+              Market Regime
+            </div>
+
+            <div
+              style={{
+                marginTop: 5,
+                fontSize: 15,
+                fontWeight: 900,
+                color: regimeColor,
+              }}
+            >
+              {regime}
+            </div>
+          </div>
+
+          {/* Volatility */}
+          <div
+            style={{
+              background: '#0b1220',
+              border: '1px solid #18243a',
+              borderRadius: 10,
+              padding: 11,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 8,
+                color: '#64748b',
+                textTransform: 'uppercase',
+              }}
+            >
+              Volatility
+            </div>
+
+            <div
+              style={{
+                marginTop: 5,
+                fontSize: 15,
+                fontWeight: 900,
+                color:
+                  market.volatility ===
+                  'EXTREME'
+                    ? '#ef4444'
+                    : market.volatility ===
+                      'HIGH'
+                    ? '#f97316'
+                    : '#22c55e',
+              }}
+            >
+              {market.volatility ||
+                'NORMAL'}
+            </div>
+          </div>
+
+          {/* Pipeline */}
+          <div
+            style={{
+              background: '#0b1220',
+              border: '1px solid #18243a',
+              borderRadius: 10,
+              padding: 11,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 8,
+                color: '#64748b',
+                textTransform: 'uppercase',
+              }}
+            >
+              Pipeline
+            </div>
+
+            <div
+              style={{
+                marginTop: 6,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 10,
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: ps
+                    ? '#22c55e'
+                    : '#eab308',
+                }}
+              />
+
+              {ps
+                ? 'ACTIVE'
+                : 'WAITING'}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 10,
+            fontSize: 8,
+            color: '#475569',
+          }}
+        >
+          Last pipeline run:{' '}
+          {ps?.last_run
+            ? new Date(
+                ps.last_run +
+                  (ps.last_run.endsWith(
+                    'Z'
+                  )
+                    ? ''
+                    : 'Z')
+              ).toLocaleString()
+            : 'Never'}
+        </div>
+      </DashboardCard>
+
+      {/* =====================================================
+          RISK ENGINE
+      ===================================================== */}
+
+      <DashboardCard
+        style={{
+          marginBottom: 16,
+        }}
+      >
+        <SectionHeader
+          eyebrow="Risk Engine"
+          title="Risk & Exposure"
+          right="CURRENT AGENT STATE"
+        />
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-around',
+          }}
+        >
+          <Gauge
+            value={confidence}
+            label="Confidence"
+            color="#38bdf8"
           />
 
-          <SectorChart
-            sectors={sectors}
-            onGoToSector={onGoToSector}
+          <Gauge
+            value={exposure}
+            label="Exposure"
+            color="#22c55e"
           />
 
-        </Card>
+          <div
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              borderLeft:
+                '1px solid #1e293b',
+              paddingLeft: 15,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 9,
+                color: '#64748b',
+                textTransform: 'uppercase',
+              }}
+            >
+              Volatility
+            </div>
 
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 900,
+                marginTop: 7,
+                color:
+                  market.volatility ===
+                    'HIGH' ||
+                  market.volatility ===
+                    'EXTREME'
+                    ? '#ef4444'
+                    : '#22c55e',
+              }}
+            >
+              {market.volatility ||
+                'NORMAL'}
+            </div>
+          </div>
+        </div>
+      </DashboardCard>
+
+      {/* =====================================================
+          PORTFOLIO
+      ===================================================== */}
+
+      <DashboardCard
+        onClick={onGoToAlpaca}
+        style={{
+          marginBottom: 16,
+        }}
+      >
+        <SectionHeader
+          eyebrow="Account"
+          title="💰 Portfolio"
+          right="OPEN ALPACA →"
+        />
+
+        {alpacaData ? (
+          <>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(4, 1fr)',
+                gap: 8,
+              }}
+            >
+              {[
+                {
+                  label: 'Equity',
+                  value: `$${Number(
+                    alpacaData.equity ||
+                      0
+                  ).toLocaleString()}`,
+                },
+                {
+                  label: 'Cash',
+                  value: `$${Number(
+                    alpacaData.cash ||
+                      0
+                  ).toLocaleString()}`,
+                },
+                {
+                  label: 'Daily P&L',
+                  value: `$${Number(
+                    alpacaData.daily_pnl ||
+                      0
+                  ).toLocaleString()}`,
+                  pnl: true,
+                },
+                {
+                  label: 'Positions',
+                  value:
+                    alpacaData.positions
+                      ?.length || 0,
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    background: '#0b1220',
+                    border:
+                      '1px solid #18243a',
+                    borderRadius: 9,
+                    padding: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 7,
+                      color: '#64748b',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {item.label}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: item.pnl
+                        ? alpacaData.daily_pnl >=
+                          0
+                          ? '#22c55e'
+                          : '#ef4444'
+                        : '#f8fafc',
+                    }}
+                  >
+                    {item.pnl &&
+                    alpacaData.daily_pnl >=
+                      0
+                      ? '+'
+                      : ''}
+                    {item.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {alpacaData.positions
+              ?.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 6,
+                  marginTop: 10,
+                  overflow: 'hidden',
+                }}
+              >
+                {alpacaData.positions
+                  .slice(0, 6)
+                  .map((p) => (
+                    <div
+                      key={p.symbol}
+                      style={{
+                        padding:
+                          '5px 8px',
+                        borderRadius: 6,
+                        background:
+                          '#111b2c',
+                        border:
+                          '1px solid #1e293b',
+                        fontSize: 8,
+                        whiteSpace:
+                          'nowrap',
+                      }}
+                    >
+                      <b>{p.symbol}</b>{' '}
+                      <span
+                        style={{
+                          color:
+                            p.pnl_pct >=
+                            0
+                              ? '#22c55e'
+                              : '#ef4444',
+                        }}
+                      >
+                        {p.pnl_pct >= 0
+                          ? '+'
+                          : ''}
+                        {Number(
+                          p.pnl_pct || 0
+                        ).toFixed(1)}
+                        %
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div
+            style={{
+              color: '#475569',
+              fontSize: 12,
+              textAlign: 'center',
+              padding: 20,
+            }}
+          >
+            Connecting to Alpaca...
+          </div>
+        )}
+      </DashboardCard>
+
+      {/* =====================================================
+          MARKET PULSE
+      ===================================================== */}
+
+      {Object.keys(
+        marketData || {}
+      ).length > 0 && (
+        <div
+          style={{
+            marginBottom: 24,
+          }}
+        >
+          <SectionHeader
+            eyebrow="Live Tape"
+            title="📡 Market Pulse"
+            right="LIVE MARKET DATA"
+          />
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(170px, 1fr))',
+              gap: 10,
+            }}
+          >
+            {Object.entries(
+              marketData
+            ).map(([sym, data]) => {
+              const info =
+                getMarketInfo(
+                  sym,
+                  data
+                );
+
+              const price =
+                livePrices?.[sym]?.price ??
+                data.price;
+
+              const change =
+                livePrices?.[sym]
+                  ?.change_pct ??
+                data.change_pct ??
+                0;
+
+              const numericChange =
+                Number(change) || 0;
+
+              const positive =
+                numericChange >= 0;
+
+              return (
+                <div
+                  key={sym}
+                  style={{
+                    background:
+                      'linear-gradient(145deg,#0f172a,#0b1220)',
+                    border:
+                      '1px solid #1e293b',
+                    borderRadius: 12,
+                    padding: 12,
+                    position:
+                      'relative',
+                    overflow:
+                      'hidden',
+                  }}
+                >
+                  {/* top signal bar */}
+                  <div
+                    style={{
+                      position:
+                        'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 3,
+                      background:
+                        positive
+                          ? '#22c55e'
+                          : '#ef4444',
+                    }}
+                  />
+
+                  {/* ticker */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent:
+                        'space-between',
+                      alignItems:
+                        'flex-start',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 800,
+                          color:
+                            '#f8fafc',
+                        }}
+                      >
+                        {info.icon}{' '}
+                        {sym}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 8,
+                          color:
+                            '#38bdf8',
+                          fontWeight:
+                            700,
+                          letterSpacing:
+                            0.7,
+                          marginTop: 2,
+                        }}
+                      >
+                        {info.category}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius:
+                          '50%',
+                        background:
+                          '#22c55e',
+                        boxShadow:
+                          '0 0 8px rgba(34,197,94,.8)',
+                      }}
+                    />
+                  </div>
+
+                  {/* description */}
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color:
+                        '#94a3b8',
+                      minHeight: 28,
+                    }}
+                  >
+                    {info.name}
+                  </div>
+
+                  {/* price */}
+                  <div
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 800,
+                      color:
+                        '#f8fafc',
+                      marginTop: 8,
+                    }}
+                  >
+                    {price != null
+                      ? `$${Number(
+                          price
+                        ).toLocaleString()}`
+                      : '—'}
+                  </div>
+
+                  {/* change */}
+                  <div
+                    style={{
+                      marginTop: 5,
+                      display: 'flex',
+                      alignItems:
+                        'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span
+                      style={{
+                        color:
+                          positive
+                            ? '#22c55e'
+                            : '#ef4444',
+                        fontWeight: 700,
+                        fontSize: 13,
+                      }}
+                    >
+                      {positive
+                        ? '▲'
+                        : '▼'}{' '}
+                      {positive
+                        ? '+'
+                        : ''}
+                      {numericChange.toFixed(
+                        2
+                      )}
+                      %
+                    </span>
+
+                    <span
+                      style={{
+                        color:
+                          '#475569',
+                        fontSize: 8,
+                      }}
+                    >
+                      today
+                    </span>
+                  </div>
+
+                  {/* momentum */}
+                  <div
+                    style={{
+                      height: 4,
+                      background:
+                        '#172235',
+                      borderRadius: 5,
+                      marginTop: 10,
+                      overflow:
+                        'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(
+                          Math.abs(
+                            numericChange
+                          ) * 18,
+                          100
+                        )}%`,
+                        background:
+                          positive
+                            ? '#22c55e'
+                            : '#ef4444',
+                        borderRadius: 5,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          SECTOR MOMENTUM RADAR
+      ===================================================== */}
+
+      {sortedSectors.length > 0 && (
+        <DashboardCard
+          style={{
+            marginBottom: 16,
+          }}
+        >
+          <SectionHeader
+            eyebrow="Rotation Engine"
+            title="🗺️ Sector Momentum Radar"
+            right="SORTED BY ACCELERATION"
+          />
+
+          {/* Legend */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              flexWrap: 'wrap',
+              marginBottom: 12,
+              fontSize: 8,
+              color: '#64748b',
+            }}
+          >
+            <span>
+              🚀 Explosive
+            </span>
+            <span>
+              ↗️ Money In
+            </span>
+            <span>
+              ↘️ Money Out
+            </span>
+            <span>
+              ⚡ Compressed
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gap: 9,
+            }}
+          >
+            {sortedSectors.map(
+              (s, index) => {
+                const sig =
+                  s.rotation_signal ||
+                  'NEUTRAL';
+
+                const accel =
+                  Number(
+                    s.momentum_accel ??
+                      0
+                  );
+
+                const compressed =
+                  (s.compression_20d ??
+                    1) < 0.06;
+
+                const sigCfg = {
+                  EXPLOSIVE: {
+                    color:
+                      '#22c55e',
+                    emoji: '🚀',
+                    label:
+                      'EXPLOSIVE',
+                  },
+                  ROTATING_IN: {
+                    color:
+                      '#16a34a',
+                    emoji: '↗️',
+                    label:
+                      'IN',
+                  },
+                  ROTATING_OUT: {
+                    color:
+                      '#ef4444',
+                    emoji: '↘️',
+                    label:
+                      'OUT',
+                  },
+                  NEUTRAL: {
+                    color:
+                      '#64748b',
+                    emoji: '➡️',
+                    label:
+                      'NEUTRAL',
+                  },
+                }[sig] || {
+                  color: '#64748b',
+                  emoji: '➡️',
+                  label: 'NEUTRAL',
+                };
+
+                return (
+                  <div
+                    key={s.code}
+                    onClick={() =>
+                      onGoToSector(
+                        s.code
+                      )
+                    }
+                    style={{
+                      display:
+                        'grid',
+                      gridTemplateColumns:
+                        '24px 55px 1fr 55px',
+                      gap: 8,
+                      alignItems:
+                        'center',
+                      cursor:
+                        'pointer',
+                      padding:
+                        '7px 5px',
+                      borderRadius: 8,
+                      background:
+                        sig ===
+                        'EXPLOSIVE'
+                          ? 'rgba(34,197,94,.04)'
+                          : 'transparent',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 8,
+                        color:
+                          '#475569',
+                      }}
+                    >
+                      {String(
+                        index + 1
+                      ).padStart(
+                        2,
+                        '0'
+                      )}
+                    </div>
+
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight:
+                            800,
+                        }}
+                      >
+                        {s.code}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 7,
+                          color:
+                            '#64748b',
+                          marginTop: 2,
+                        }}
+                      >
+                        {s.name
+                          ?.split(
+                            ' '
+                          )[0] ||
+                          'Sector'}
+                      </div>
+                    </div>
+
+                    <MomentumBar
+                      value={
+                        accel
+                      }
+                    />
+
+                    <div
+                      style={{
+                        textAlign:
+                          'right',
+                        fontSize: 9,
+                        fontWeight:
+                          900,
+                        color:
+                          sigCfg.color,
+                      }}
+                    >
+                      {accel >= 0
+                        ? '+'
+                        : ''}
+                      {accel.toFixed(
+                        0
+                      )}
+                    </div>
+
+                    {compressed && (
+                      <span
+                        style={{
+                          position:
+                            'absolute',
+                          display:
+                            'none',
+                        }}
+                      >
+                        ⚡
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+            )}
+          </div>
+        </DashboardCard>
       )}
 
       {/* =====================================================
           TOP SETUPS
       ===================================================== */}
 
-      <div className="sl-setups">
-
-        <SectionTitle
-          eyebrow="SIGNAL ENGINE"
-          title="Top Setups"
-          right={
-            <span className="sl-section-note">
-              {topSetups.length} candidates · click to inspect
-            </span>
-          }
+      <DashboardCard
+        style={{
+          marginBottom: 16,
+        }}
+      >
+        <SectionHeader
+          eyebrow="Signal Engine"
+          title="🔥 Top Setups"
+          right={`${topSetups.length} HIGH-CONVICTION SIGNALS`}
         />
 
-        <div className="sl-setup-list">
-
-          {topSetups
-            .slice(0, 12)
-            .map((asset, i) => (
-
-              <SetupRow
-                key={asset.ticker}
-                asset={asset}
-                index={i}
-                livePrices={livePrices}
-                mlPredictions={mlPredictions}
-                trendPredictions={trendPredictions}
-                onLoadFullStock={
-                  onLoadFullStock
-                }
-              />
-
-            ))}
-
-        </div>
-
-        {!topSetups.length && (
-
-          <div className="sl-empty">
+        {topSetups.length === 0 ? (
+          <div
+            style={{
+              padding: 30,
+              textAlign: 'center',
+              color: '#475569',
+              fontSize: 12,
+            }}
+          >
             No setups available.
           </div>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            {topSetups.map(
+              (a, index) => {
+                const live =
+                  getLivePrice(
+                    a.ticker
+                  );
 
+                const price =
+                  live?.price ??
+                  a.price;
+
+                const change =
+                  live?.change_pct ??
+                  a.change_pct ??
+                  0;
+
+                const score =
+                  Number(
+                    a.setup_score ||
+                      0
+                  );
+
+                const ml =
+                  mlPredictions?.[
+                    a.ticker
+                  ];
+
+                const trend =
+                  trendPredictions?.[
+                    a.ticker
+                  ];
+
+                return (
+                  <div
+                    key={
+                      a.ticker
+                    }
+                    onClick={() =>
+                      onLoadFullStock(
+                        a.ticker
+                      )
+                    }
+                    style={{
+                      background:
+                        'linear-gradient(90deg, rgba(15,24,40,.95), rgba(10,17,29,.75))',
+                      border:
+                        '1px solid #1e293b',
+                      borderRadius: 11,
+                      padding: 10,
+                      cursor:
+                        'pointer',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display:
+                          'grid',
+                        gridTemplateColumns:
+                          '24px 55px 1fr 55px',
+                        gap: 8,
+                        alignItems:
+                          'center',
+                      }}
+                    >
+                      {/* rank */}
+                      <div
+                        style={{
+                          fontSize: 8,
+                          color:
+                            '#475569',
+                        }}
+                      >
+                        {String(
+                          index + 1
+                        ).padStart(
+                          2,
+                          '0'
+                        )}
+                      </div>
+
+                      {/* ticker */}
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight:
+                              900,
+                          }}
+                        >
+                          {a.ticker}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 7,
+                            color:
+                              '#64748b',
+                            marginTop: 2,
+                          }}
+                        >
+                          {a.sector_code ||
+                            '—'}
+                        </div>
+                      </div>
+
+                      {/* signal */}
+                      <div>
+                        <div
+                          style={{
+                            height: 6,
+                            background:
+                              '#172235',
+                            borderRadius:
+                              10,
+                            overflow:
+                              'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min(
+                                score,
+                                100
+                              )}%`,
+                              height:
+                                '100%',
+                              borderRadius:
+                                10,
+                              background:
+                                getScoreColor(
+                                  score
+                                ),
+                            }}
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            display:
+                              'flex',
+                            gap: 5,
+                            marginTop: 5,
+                            flexWrap:
+                              'wrap',
+                            alignItems:
+                              'center',
+                          }}
+                        >
+                          {getSetupBadge(
+                            a.setup_type
+                          )}
+
+                          {mlPredictions?.[
+                            a.ticker
+                          ] && (
+                            <span
+                              style={{
+                                background:
+                                  ml.prediction ===
+                                  'WIN'
+                                    ? 'rgba(34,197,94,.12)'
+                                    : 'rgba(239,68,68,.12)',
+                                color:
+                                  ml.prediction ===
+                                  'WIN'
+                                    ? '#22c55e'
+                                    : '#ef4444',
+                                padding:
+                                  '2px 6px',
+                                borderRadius:
+                                  4,
+                                fontSize: 8,
+                                fontWeight:
+                                  600,
+                              }}
+                            >
+                              🧠 ML{' '}
+                              {
+                                ml.ml_score
+                              }
+                              %
+                            </span>
+                          )}
+
+                          {trendPredictions?.[
+                            a.ticker
+                          ] && (
+                            <span
+                              style={{
+                                background:
+                                  trend.prediction ===
+                                  'UP'
+                                    ? 'rgba(34,197,94,.12)'
+                                    : trend.prediction ===
+                                      'DOWN'
+                                    ? 'rgba(239,68,68,.12)'
+                                    : 'rgba(234,179,8,.12)',
+                                color:
+                                  trend.prediction ===
+                                  'UP'
+                                    ? '#22c55e'
+                                    : trend.prediction ===
+                                      'DOWN'
+                                    ? '#ef4444'
+                                    : '#eab308',
+                                padding:
+                                  '2px 6px',
+                                borderRadius:
+                                  4,
+                                fontSize: 8,
+                                fontWeight:
+                                  600,
+                              }}
+                            >
+                              {trend.prediction ===
+                              'UP'
+                                ? '📈'
+                                : trend.prediction ===
+                                  'DOWN'
+                                ? '📉'
+                                : '➡️'}{' '}
+                              {
+                                trend.up_prob
+                              }
+                              %
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* score */}
+                      <div
+                        style={{
+                          textAlign:
+                            'right',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 17,
+                            fontWeight:
+                              900,
+                            color:
+                              getScoreColor(
+                                score
+                              ),
+                          }}
+                        >
+                          {score}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 8,
+                            color:
+                              change >=
+                              0
+                                ? '#22c55e'
+                                : '#ef4444',
+                            marginTop: 2,
+                          }}
+                        >
+                          {change >=
+                          0
+                            ? '+'
+                            : ''}
+                          {Number(
+                            change
+                          ).toFixed(
+                            1
+                          )}
+                          %
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* bottom metadata */}
+                    <div
+                      style={{
+                        display:
+                          'flex',
+                        justifyContent:
+                          'space-between',
+                        marginTop: 7,
+                        fontSize: 7,
+                        color:
+                          '#64748b',
+                      }}
+                    >
+                      <span>
+                        RSI{' '}
+                        {a.rsi !=
+                        null
+                          ? a.rsi.toFixed(
+                              0
+                            )
+                          : '—'}
+                      </span>
+
+                      <span>
+                        $
+                        {Number(
+                          price || 0
+                        ).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+            )}
+          </div>
         )}
-
-      </div>
+      </DashboardCard>
 
       {/* =====================================================
-          AGENTS
+          AGENT ACTIVITY
       ===================================================== */}
 
-      <Card
-        className="sl-panel-pad"
+      <DashboardCard
         onClick={onGoToAgents}
       >
-
-        <SectionTitle
-          eyebrow="AUTOMATION"
-          title="Agent Activity"
-          right={
-            <span className="sl-section-note">
-              Open Agents →
-            </span>
-          }
+        <SectionHeader
+          eyebrow="Automation"
+          title="🤖 Agent Activity"
+          right="OPEN AGENTS →"
         />
 
-        {actions.length ? (
-
-          <div className="sl-agent-list">
-
-            {actions
-              .slice(0, 6)
+        {lastActions.length ===
+        0 ? (
+          <div
+            style={{
+              padding: 20,
+              textAlign:
+                'center',
+              color: '#475569',
+              fontSize: 10,
+            }}
+          >
+            No recent agent
+            actions.
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gap: 6,
+            }}
+          >
+            {lastActions
+              .slice(0, 5)
               .map((a, i) => (
-
                 <div
-                  className="sl-agent"
                   key={i}
+                  style={{
+                    display:
+                      'flex',
+                    justifyContent:
+                      'space-between',
+                    alignItems:
+                      'center',
+                    padding:
+                      '8px 9px',
+                    background:
+                      '#0b1220',
+                    border:
+                      '1px solid #18243a',
+                    borderRadius: 8,
+                  }}
                 >
-
-                  <div>
-
-                    <b
-                      style={{
-                        color:
-                          a.action === 'BUY'
-                            ? C.green
-                            : a.action === 'SELL'
-                            ? C.red
-                            : '#94a3b8',
-                      }}
-                    >
-                      {a.action}
-                    </b>
-
-                    <span
-                      style={{
-                        marginLeft: 6,
-                      }}
-                    >
-                      {a.ticker}
-                    </span>
-
+                  <div
+                    style={{
+                      color:
+                        a.action ===
+                        'BUY'
+                          ? '#22c55e'
+                          : a.action ===
+                            'SELL'
+                          ? '#ef4444'
+                          : '#eab308',
+                      fontSize: 9,
+                      fontWeight:
+                        900,
+                    }}
+                  >
+                    {a.action}
                   </div>
 
-                  {a.shares && (
-                    <span>
-                      {a.shares} shares
-                    </span>
-                  )}
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight:
+                        800,
+                    }}
+                  >
+                    {a.ticker}
+                  </div>
 
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+                      fontSize: 8,
+                    }}
+                  >
+                    {a.shares
+                      ? `${a.shares} shares`
+                      : '—'}
+                  </div>
                 </div>
-
               ))}
-
           </div>
-
-        ) : (
-
-          <div className="sl-empty">
-            No recent agent actions.
-          </div>
-
         )}
-
-      </Card>
-
+      </DashboardCard>
     </div>
   );
 }
