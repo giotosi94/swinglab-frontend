@@ -8,6 +8,7 @@ export default function Settings({ settings, setSettings, saveSettings, settings
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [applying, setApplying] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
+  const [dirtyFields, setDirtyFields] = useState({});
 
   useEffect(() => {
     fetch(`${API}/api/settings/presets`)
@@ -110,7 +111,7 @@ export default function Settings({ settings, setSettings, saveSettings, settings
                   border: `2px solid ${isActive ? color : '#1e293b'}`,
                   borderRadius: 12,
                   padding: 18,
-                  cursor: 'pointer',
+                  cursor: Object.keys(dirtyFields).length === 0 ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
                   position: 'relative',
                 }}
@@ -329,8 +330,12 @@ export default function Settings({ settings, setSettings, saveSettings, settings
                       value={value}
                       step={typeof value === 'number' && value < 1 ? 0.01 : 1}
                       onChange={(e) => {
-                        const val = typeof value === 'number' ? parseFloat(e.target.value) : e.target.value;
-                        setSettings({ ...settings, val });
+                        const raw = e.target.value;
+                        const nextValue = typeof value === 'number'
+                          ? (raw === '' || raw === '-' ? raw : Number(raw))
+                          : raw;
+                        setSettings((previous) => ({ ...previous, [key]: nextValue }));
+                        setDirtyFields((previous) => ({ ...previous, [key]: nextValue }));
                       }}
                       style={{
                         width: '100%',
@@ -347,12 +352,16 @@ export default function Settings({ settings, setSettings, saveSettings, settings
               })}
             </div>
             <button
-              onClick={saveSettings}
-              disabled={settingsSaving}
+              onClick={async () => {
+                if (Object.keys(dirtyFields).length === 0) return;
+                const ok = await saveSettings(dirtyFields);
+                if (ok) setDirtyFields({});
+              }}
+              disabled={settingsSaving || Object.keys(dirtyFields).length === 0}
               style={{
                 marginTop: 16,
                 padding: '10px 24px',
-                background: '#3b82f6',
+                background: Object.keys(dirtyFields).length === 0 ? '#334155' : '#3b82f6',
                 color: 'white',
                 border: 'none',
                 borderRadius: 8,
@@ -360,7 +369,7 @@ export default function Settings({ settings, setSettings, saveSettings, settings
                 fontWeight: 700,
               }}
             >
-              {settingsSaving ? 'Salvando...' : '💾 Salva Impostazioni Avanzate'}
+              {settingsSaving ? 'Salvando...' : `💾 Salva ${Object.keys(dirtyFields).length} modifiche`}
             </button>
           </div>
         )}
