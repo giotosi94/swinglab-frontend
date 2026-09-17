@@ -60,6 +60,8 @@ export default function BacktestWidget() {
   const metricsData = result?.metrics || {};
   const benchmark = result?.benchmark || {};
   const config = result?.config || {};
+  const positionMetrics = result?.position_metrics || {};
+  const apmStats = result?.apm_stats || {};
   const chartData = (result?.equity_curve || []).map((point) => ({
     date: point.date,
     equity: point.equity,
@@ -80,19 +82,19 @@ export default function BacktestWidget() {
   const sliderStyle = { width: "100%", accentColor: "#3b82f6" };
 
   return (
-    <div className="bg-slate-800 rounded-xl p-5 shadow-lg border border-slate-700">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+    <div style={{ background: "#0f172a", borderRadius: 12, padding: 20, border: "1px solid #1e293b", boxShadow: "0 10px 25px rgba(0,0,0,0.18)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10, flexWrap: "wrap" }}>
         <div>
-          <h3 className="text-lg font-bold text-white">Backtest Lab</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "white" }}>Backtest Lab</h3>
           <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>
             Baseline live: APM 30/30/25, floor 0/3/8, holding minimo 24h, rotazione OFF.
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowLab(!showLab)} className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold rounded-lg px-3 py-1.5 border border-slate-600 transition">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => setShowLab(!showLab)} style={{ background: "#1e293b", color: "#cbd5e1", fontSize: 12, fontWeight: 700, borderRadius: 8, padding: "8px 12px", border: "1px solid #334155", cursor: "pointer" }}>
             {showLab ? "Chiudi configurazione" : "Configura"}
           </button>
-          <button onClick={runBacktest} disabled={loading} className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-1.5 transition">
+          <button onClick={runBacktest} disabled={loading} style={{ background: loading ? "#334155" : "#2563eb", color: "white", fontSize: 13, fontWeight: 700, borderRadius: 8, padding: "8px 16px", border: "none", cursor: loading ? "not-allowed" : "pointer" }}>
             {loading ? "Simulazione..." : "Avvia backtest"}
           </button>
         </div>
@@ -144,16 +146,34 @@ export default function BacktestWidget() {
         </div>
       )}
 
-      {loading && <p className="text-slate-400 text-sm animate-pulse">Simulazione in corso...</p>}
-      {result?.error && <p className="text-red-400 text-sm">{result.error}</p>}
+      {loading && <p style={{ color: "#94a3b8", fontSize: 13 }}>Simulazione in corso...</p>}
+      {result?.error && <p style={{ color: "#f87171", fontSize: 13 }}>{result.error}</p>}
 
       {result && !result.error && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             {metrics.map((metric) => (
-              <div key={metric.label} className="bg-slate-900 rounded-lg p-3 border border-slate-700">
-                <div className="text-xs text-slate-400">{metric.label}</div>
-                <div className={`text-xl font-bold ${metric.good ? "text-emerald-400" : "text-amber-400"}`}>{metric.value}</div>
+              <div key={metric.label} style={{ background: "#111827", borderRadius: 8, padding: 12, border: "1px solid #1e293b" }}>
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>{metric.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: metric.good ? "#34d399" : "#fbbf24", marginTop: 3 }}>{metric.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginTop: 12 }}>
+            {[
+              ["Posizioni reali", positionMetrics.total_positions || 0],
+              ["Uscite/tranche", result.total_exit_records || 0],
+              ["T1 raggiunti", apmStats.t1_reached || 0],
+              ["T2 raggiunti", apmStats.t2_reached || 0],
+              ["T3 raggiunti", apmStats.t3_reached || 0],
+              ["Stop prima T1", apmStats.stopped_before_t1 || 0],
+              ["Runner finali", apmStats.runners_closed_at_end || 0],
+              ["Esposizione media", `${Number(benchmark.average_invested_pct || 0).toFixed(1)}%`],
+            ].map(([label, value]) => (
+              <div key={label} style={{ background: "#111827", borderRadius: 7, padding: 9, border: "1px solid #1e293b" }}>
+                <div style={{ color: "#64748b", fontSize: 9 }}>{label}</div>
+                <div style={{ color: "#e2e8f0", fontSize: 14, fontWeight: 700, marginTop: 2 }}>{value}</div>
               </div>
             ))}
           </div>
@@ -185,8 +205,8 @@ export default function BacktestWidget() {
       )}
 
       {result?.total_trades != null && !result.error && (
-        <p className="text-xs text-slate-500 mt-3">
-          {result.total_trades} uscite registrate, SPY {Number(benchmark.spy_return_pct || 0).toFixed(2)}%, alpha {Number(benchmark.alpha || 0).toFixed(2)}%, beta {Number(benchmark.beta || 0).toFixed(2)}.
+        <p style={{ color: "#64748b", fontSize: 11, marginTop: 12 }}>
+          {result.total_trades} posizioni reali, {result.total_exit_records || 0} record di uscita, SPY {Number(benchmark.spy_return_pct || 0).toFixed(2)}%, alpha {Number(benchmark.alpha || 0).toFixed(2)}%, beta {Number(benchmark.beta || 0).toFixed(2)}, correlazione {Number(benchmark.correlation || 0).toFixed(2)}, giorni allineati {benchmark.aligned_days || 0}.
         </p>
       )}
     </div>
