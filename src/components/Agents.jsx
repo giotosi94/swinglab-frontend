@@ -5,8 +5,7 @@ import { fetchApmHistory, fetchApmStatus, fetchApmSummary } from '../utils/api';
 
 export default function Agents({
   agentsStatus, agentsLoading, selectedAgent, setSelectedAgent,
-  agentDecisions, fetchAgentDecisions, runPipeline, runLearning,
-  pipelineRunning, learningRunning, fetchAgentsStatus,
+  agentDecisions, fetchAgentDecisions, fetchAgentsStatus,
 }) {
   const ps = agentsStatus?.pipeline_state;
   const ag = agentsStatus?.agents || {};
@@ -66,36 +65,6 @@ export default function Agents({
       >
         <h2 style={{ margin: 0 }}>{'\uD83E\uDD16'} Multi-Agent AI System</h2>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={runPipeline}
-            disabled={pipelineRunning}
-            style={{
-              padding: '8px 16px',
-              background: pipelineRunning ? '#334155' : '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-          >
-            {pipelineRunning ? '\u23F3 Running...' : '\u25B6\uFE0F Run Pipeline'}
-          </button>
-          <button
-            onClick={runLearning}
-            disabled={learningRunning}
-            style={{
-              padding: '8px 16px',
-              background: learningRunning ? '#334155' : '#8b5cf6',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-          >
-            {learningRunning ? '\u23F3 Learning...' : '\uD83E\uDDEC Learn All'}
-          </button>
           <button
             onClick={fetchAgentsStatus}
             style={{
@@ -588,7 +557,7 @@ export default function Agents({
               {name === 'alpha_strategist' && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Min Conf: {p.min_confluence || 35}
+                    Min Conf: {p.min_confluence || 48}
                   </span>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
                     Max RSI: {p.max_rsi_entry || 68}
@@ -613,13 +582,13 @@ export default function Agents({
               {name === 'risk_manager' && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Risk: {p.risk_pct_per_trade || 2}%
+                    Risk: {p.risk_pct_per_trade || 3}%
                   </span>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    R/R{'\u2265'}{p.min_risk_reward || 1.5}
+                    R/R{'\u2265'}{p.min_risk_reward || 1.3}
                   </span>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Max: {p.max_positions || 5} pos
+                    Max: {p.max_positions || 12} pos
                   </span>
                 </div>
               )}
@@ -627,10 +596,10 @@ export default function Agents({
               {name === 'adaptive_position_manager' && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Check: {p.apm_check_interval_hours || 3}h
+                    Check: {p.apm_check_interval_hours || 1}h
                   </span>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Exit Conf: {p.apm_exit_confluence_threshold || 30}
+                    Exit Conf: {p.apm_exit_confluence_threshold || 25}
                   </span>
                   <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: p.apm_enabled !== false ? '#8b5cf6' : '#ef4444' }}>
                     {p.apm_enabled !== false ? '✅ ON' : '❌ OFF'}
