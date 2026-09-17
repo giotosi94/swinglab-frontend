@@ -41,8 +41,6 @@ function App() {
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [agentDecisions, setAgentDecisions] = useState([]);
-  const [pipelineRunning, setPipelineRunning] = useState(false);
-  const [learningRunning, setLearningRunning] = useState(false);
 
   // Settings
   const [settings, setSettings] = useState({
@@ -124,33 +122,6 @@ function App() {
   };
 
   // ===== ACTIONS =====
-  const handleBuy = async (symbol, qty) => {
-    const d = await api.alpacaBuy(symbol, qty);
-    if (d && !d.error) {
-      toast.success(`BUY ${symbol} x${qty} inviato`);
-      await refreshAlpaca();
-    } else {
-      toast.error(`Buy ${symbol} fallito`);
-    }
-  };
-
-  const handleClose = async (symbol) => {
-    const d = await api.alpacaClose(symbol);
-    if (d) {
-      toast.success(`Posizione ${symbol} chiusa`);
-      await refreshAlpaca();
-    } else {
-      toast.error(`Close ${symbol} fallito`);
-    }
-  };
-
-  const handleCloseAll = async () => {
-    if (!window.confirm('Close ALL positions?')) return;
-    await api.alpacaCloseAll();
-    toast.info('Chiusura tutte le posizioni...');
-    await refreshAlpaca();
-  };
-
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -175,32 +146,6 @@ function App() {
       toast.error(`Errore caricamento ${ticker}`);
     }
     setStockLoading(false);
-  };
-
-  const handleRunPipeline = async () => {
-    setPipelineRunning(true);
-    const d = await api.runPipeline();
-    if (d && !d.error) {
-      toast.success('Pipeline completata');
-      await refreshAgentsStatus();
-      await refreshTrader();
-      await refreshAlpaca();
-    } else {
-      toast.error('Pipeline fallita');
-    }
-    setPipelineRunning(false);
-  };
-
-  const handleRunLearning = async () => {
-    setLearningRunning(true);
-    const d = await api.runLearning();
-    if (d && !d.error) {
-      toast.success('Learning completato');
-      await refreshAgentsStatus();
-    } else {
-      toast.error('Learning fallito');
-    }
-    setLearningRunning(false);
   };
 
   const handleFetchAgentDecisions = async (name) => {
@@ -316,7 +261,7 @@ function App() {
             assets={assets}
             selectedSector={selectedSector} setSelectedSector={setSelectedSector}
             selectedStock={selectedStock} setSelectedStock={setSelectedStock}
-            livePrices={livePrices} onBuy={handleBuy}
+            livePrices={livePrices}
             onLoadFullStock={loadFullStock}
             mlPredictions={mlPredictions} trendPredictions={trendPredictions}
           />
@@ -326,17 +271,13 @@ function App() {
             selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent}
             agentDecisions={agentDecisions}
             fetchAgentDecisions={handleFetchAgentDecisions}
-            runPipeline={handleRunPipeline} runLearning={handleRunLearning}
-            pipelineRunning={pipelineRunning} learningRunning={learningRunning}
             fetchAgentsStatus={refreshAgentsStatus}
           />
         ) : view === 'alpaca' ? (
           <Alpaca
             alpacaData={alpacaData} equityPeriods={equityPeriods}
             selectedPeriod={selectedPeriod} setSelectedPeriod={setSelectedPeriod}
-            alpacaBuy={handleBuy} alpacaClose={handleClose}
-            alpacaCloseAll={handleCloseAll}
-            assets={assets} settings={settings}
+            assets={assets}
           />
         ) : view === 'trades' ? (
           <Trades />
