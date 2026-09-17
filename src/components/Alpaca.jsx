@@ -2,50 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { getSetupBadge } from '../utils/helpers';
-import { fetchBenchmark, fetchPositionsDetail } from '../utils/api';
+import { fetchBenchmark } from '../utils/api';
 import ApmActions from './ApmActions';
 import PositionsUnified from './PositionsUnified';
 
 export default function Alpaca({
-  alpacaData, equityPeriods, selectedPeriod, setSelectedPeriod,
-  alpacaBuy, alpacaClose, alpacaCloseAll, assets, settings,
+  alpacaData, equityPeriods, selectedPeriod, setSelectedPeriod, assets,
 }) {
-  const [buyTicker, setBuyTicker] = useState('');
-  const [buyQty, setBuyQty] = useState(1);
-  const [buyLoading, setBuyLoading] = useState(false);
   const [spyData, setSpyData] = useState(null);
   const [showBenchmark, setShowBenchmark] = useState(true);
 
-  // 🆕 v3.4 — Positions detail with SL/TP from DB (fractional shares)
-  const [positionsDetail, setPositionsDetail] = useState({});
-
-  useEffect(() => {
-    fetchBenchmark(selectedPeriod)
-      .then(d => { if (d && d.points) setSpyData(d); })
-      .catch(() => {});
-  }, [selectedPeriod]);
-
-  // 🆕 v3.4 — Fetch positions detail (SL/TP dal DB)
-  useEffect(() => {
-    async function loadDetail() {
-      const data = await fetchPositionsDetail();
-      if (data && data.positions) {
-        // Trasforma array in mappa per lookup veloce
-        const map = {};
-        data.positions.forEach(p => { map[p.ticker] = p; });
-        setPositionsDetail(map);
-      }
-    }
-    loadDetail();
-    // Refresh ogni 30 secondi
-    const interval = setInterval(loadDetail, 30000);
-    return () => clearInterval(interval);
-  }, [alpacaData]);
-
-  // Build asset map for setup badges on positions
-  const assetMap = {};
-  assets.forEach((a) => { assetMap[a.ticker] = a; });
 
   // Period P&L calculation
   const getPeriodPnL = () => {
@@ -63,19 +29,6 @@ export default function Alpaca({
 
   const periodPnL = getPeriodPnL();
 
-  // Handle buy
-  const handleBuy = async () => {
-    if (!buyTicker.trim() || buyQty < 1) return;
-    setBuyLoading(true);
-    try {
-      await alpacaBuy(buyTicker.trim().toUpperCase(), buyQty);
-      setBuyTicker('');
-      setBuyQty(1);
-    } catch (e) {
-      // error handled in parent
-    }
-    setBuyLoading(false);
-  };
 
   // Order status color
   const getStatusColor = (status) =>
@@ -89,21 +42,6 @@ export default function Alpaca({
       rejected: '#ef4444',
     }[status] || '#64748b');
 
-  // 🆕 v3.4 — Colore dinamico distanza SL/TP
-  const getDistanceColor = (distancePct, isTarget) => {
-    // Per target: se molto vicino a target = verde (buono)
-    // Per stop: se molto vicino a stop = rosso (pericolo)
-    const abs = Math.abs(distancePct);
-    if (isTarget) {
-      if (abs < 2) return '#22c55e';  // vicino target = verde
-      if (abs < 5) return '#eab308';  // medio
-      return '#94a3b8';  // lontano = neutro
-    } else {
-      if (abs < 2) return '#ef4444';  // vicino stop = rosso
-      if (abs < 5) return '#eab308';  // medio
-      return '#94a3b8';  // lontano stop = neutro
-    }
-  };
 
   if (!alpacaData) {
     return (
@@ -164,77 +102,6 @@ export default function Alpaca({
         ))}
       </div>
 
-      {/* ===== Quick Buy Form ===== */}
-      <div
-        style={{
-          background: '#0f172a',
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 20,
-          border: '1px solid #1e293b',
-        }}
-      >
-        <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>
-          {'\uD83D\uDED2'} Quick Buy
-        </h3>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            value={buyTicker}
-            onChange={(e) => setBuyTicker(e.target.value.toUpperCase())}
-            placeholder="AAPL"
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid #334155',
-              background: '#1e293b',
-              color: 'white',
-              fontSize: 14,
-              fontWeight: 600,
-              width: 120,
-              textTransform: 'uppercase',
-            }}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ color: '#94a3b8', fontSize: 12 }}>Qty:</span>
-            <input
-              type="number"
-              value={buyQty}
-              min={1}
-              onChange={(e) => setBuyQty(Math.max(1, parseInt(e.target.value) || 1))}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #334155',
-                background: '#1e293b',
-                color: 'white',
-                fontSize: 14,
-                fontWeight: 600,
-                width: 80,
-              }}
-            />
-          </div>
-          <button
-            onClick={handleBuy}
-            disabled={buyLoading || !buyTicker.trim()}
-            style={{
-              padding: '8px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background:
-                buyLoading || !buyTicker.trim() ? '#334155' : '#22c55e',
-              color: 'white',
-              cursor: buyLoading || !buyTicker.trim() ? 'default' : 'pointer',
-              fontWeight: 700,
-              fontSize: 14,
-            }}
-          >
-            {buyLoading ? '\u23F3 Buying...' : '\u25B6 BUY'}
-          </button>
-          <span style={{ color: '#64748b', fontSize: 11 }}>
-            Market order via Alpaca Paper
-          </span>
-        </div>
-      </div>
 
       {/* ========== EQUITY + BENCHMARK CHART ========== */}
       {Object.keys(equityPeriods).length > 0 && (
@@ -384,12 +251,7 @@ export default function Alpaca({
       <ApmActions />
 
       {/* ===== v4.6 Unified Positions with Adaptive Targets ===== */}
-      <PositionsUnified
-        alpacaData={alpacaData}
-        alpacaClose={alpacaClose}
-        alpacaCloseAll={alpacaCloseAll}
-        assets={assets}
-      />
+      <PositionsUnified alpacaData={alpacaData} assets={assets} />
       
       {/* ===== Portfolio Summary ===== */}
       {alpacaData.positions?.length > 0 && (
