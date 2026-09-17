@@ -208,15 +208,18 @@ function App() {
     if (d && d.decisions) setAgentDecisions(d.decisions);
   };
 
-  const handleSaveSettings = async () => {
+  const handleSaveSettings = async (changes) => {
     setSettingsSaving(true);
-    const d = await api.saveSettings(settings);
+    const d = await api.saveSettings(changes);
     if (d && !d.error) {
-      toast.success('Settings salvate e propagate a tutti gli agenti');
-    } else {
-      toast.error('Salvataggio settings fallito');
+      setSettings((previous) => ({ ...previous, ...(d.settings || changes) }));
+      toast.success('Modifiche salvate e propagate');
+      setSettingsSaving(false);
+      return true;
     }
+    toast.error('Salvataggio settings fallito');
     setSettingsSaving(false);
+    return false;
   };
 
   // ===== EFFECTS =====
