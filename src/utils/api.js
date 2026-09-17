@@ -37,10 +37,6 @@ export const fetchStartingCapital = () => get('/api/data/starting-capital');
 // 🆕 v3.4 — Positions with SL/TP details from DB (per fractional shares)
 export const fetchPositionsDetail = () => get('/api/debug/positions-detail');
 
-// ---------- Alpaca Actions ----------
-export const alpacaBuy = (symbol, qty) => post(`/api/data/alpaca/buy?symbol=${symbol}&qty=${qty}`);
-export const alpacaClose = (symbol) => post(`/api/data/alpaca/close/${symbol}`);
-export const alpacaCloseAll = () => post('/api/data/alpaca/close-all');
 
 // ---------- AutoTrader ----------
 export const runTrader = () => post('/api/data/autotrader/run');
@@ -72,8 +68,6 @@ export const fetchAnalytics = () => get('/api/trades/analytics');
 // ---------- Agents ----------
 export const fetchAgentsStatus = () => get('/api/agents/status');
 export const fetchAgentDecisions = (name, limit = 20) => get(`/api/agents/${name}/decisions?limit=${limit}`);
-export const runPipeline = () => post('/api/agents/run');
-export const runLearning = () => post('/api/agents/learn');
 // 🆕 v4.0 — APM (Adaptive Position Manager)
 export const fetchApmHistory = (limit = 30) => get(`/api/agents/apm-history?limit=${limit}`);
 export const fetchApmStatus = () => get('/api/agents/apm/status');
