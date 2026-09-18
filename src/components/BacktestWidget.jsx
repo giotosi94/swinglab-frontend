@@ -15,6 +15,8 @@ export default function BacktestWidget() {
   const [sectorBottom, setSectorBottom] = useState(false);
   const [crashDeploy, setCrashDeploy] = useState(false);
   const [rotation, setRotation] = useState(false);
+  const [dynamicSizing, setDynamicSizing] = useState(false);
+  const [apmExitProxy, setApmExitProxy] = useState(false);
 
   const runBacktest = async () => {
     setLoading(true);
@@ -29,6 +31,8 @@ export default function BacktestWidget() {
         use_sector_bottom: String(sectorBottom),
         use_crash_deploy: String(crashDeploy),
         use_rotation: String(rotation),
+        use_dynamic_sizing: String(dynamicSizing),
+        use_apm_exit_proxy: String(apmExitProxy),
         t1_ratio: "0.40",
         t2_ratio: "0.70",
         t3_ratio: "1.00",
@@ -62,6 +66,7 @@ export default function BacktestWidget() {
   const config = result?.config || {};
   const positionMetrics = result?.position_metrics || {};
   const apmStats = result?.apm_stats || {};
+  const sizingStats = result?.sizing_stats || {};
   const chartData = (result?.equity_curve || []).map((point) => ({
     date: point.date,
     equity: point.equity,
@@ -138,6 +143,14 @@ export default function BacktestWidget() {
               <input type="checkbox" checked={crashDeploy} onChange={(event) => setCrashDeploy(event.target.checked)} />
               Crash Deploy
             </label>
+            <label style={toggleStyle}>
+              <input type="checkbox" checked={dynamicSizing} onChange={(event) => setDynamicSizing(event.target.checked)} />
+              Sizing reale DPS + Kelly + regime
+            </label>
+            <label style={toggleStyle}>
+              <input type="checkbox" checked={apmExitProxy} onChange={(event) => setApmExitProxy(event.target.checked)} />
+              APM Exit Proxy point-in-time
+            </label>
             <label style={{ ...toggleStyle, color: "#94a3b8" }}>
               <input type="checkbox" checked={rotation} onChange={(event) => setRotation(event.target.checked)} />
               Rotazione settoriale, solo test informativo
@@ -170,6 +183,11 @@ export default function BacktestWidget() {
               ["Stop prima T1", apmStats.stopped_before_t1 || 0],
               ["Runner finali", apmStats.runners_closed_at_end || 0],
               ["Esposizione media", `${Number(benchmark.average_invested_pct || 0).toFixed(1)}%`],
+              ["Size media reale", `${Number(sizingStats.avg_effective_size_pct || 0).toFixed(2)}%`],
+              ["DPS medio", `${Number(sizingStats.avg_dps_multiplier || 1).toFixed(2)}x`],
+              ["Kelly medio", `${Number(sizingStats.avg_kelly_multiplier || 1).toFixed(2)}x`],
+              ["Regime medio", `${Number(sizingStats.avg_regime_multiplier || 1).toFixed(2)}x`],
+              ["APM Exit Proxy", apmStats.apm_exit_proxy_events || 0],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "#111827", borderRadius: 7, padding: 9, border: "1px solid #1e293b" }}>
                 <div style={{ color: "#64748b", fontSize: 9 }}>{label}</div>
@@ -179,7 +197,7 @@ export default function BacktestWidget() {
           </div>
 
           <div style={{ marginTop: 12, padding: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8" }}>
-            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}.
+            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}.
           </div>
 
           {(result.validation_notes || []).map((note) => (
