@@ -15,6 +15,7 @@ export default function BacktestWidget() {
   const [sectorBottom, setSectorBottom] = useState(false);
   const [crashDeploy, setCrashDeploy] = useState(false);
   const [rotation, setRotation] = useState(false);
+  const [sectorIntelligence, setSectorIntelligence] = useState(false);
   const [dynamicSizing, setDynamicSizing] = useState(false);
   const [apmExitProxy, setApmExitProxy] = useState(false);
 
@@ -31,6 +32,7 @@ export default function BacktestWidget() {
         use_sector_bottom: String(sectorBottom),
         use_crash_deploy: String(crashDeploy),
         use_rotation: String(rotation),
+        use_sector_intelligence: String(sectorIntelligence),
         use_dynamic_sizing: String(dynamicSizing),
         use_apm_exit_proxy: String(apmExitProxy),
         t1_ratio: "0.40",
@@ -67,6 +69,7 @@ export default function BacktestWidget() {
   const positionMetrics = result?.position_metrics || {};
   const apmStats = result?.apm_stats || {};
   const sizingStats = result?.sizing_stats || {};
+  const sectorIntelligenceStats = result?.sector_intelligence_stats || {};
   const dataCoverage = result?.data_coverage || {};
   const chartData = (result?.equity_curve || []).map((point) => ({
     date: point.date,
@@ -152,6 +155,10 @@ export default function BacktestWidget() {
               <input type="checkbox" checked={apmExitProxy} onChange={(event) => setApmExitProxy(event.target.checked)} />
               APM Exit Proxy point-in-time
             </label>
+            <label style={{ ...toggleStyle, color: "#60a5fa", fontWeight: 700 }}>
+              <input type="checkbox" checked={sectorIntelligence} onChange={(event) => setSectorIntelligence(event.target.checked)} />
+              Sector Intelligence point-in-time
+            </label>
             <label style={{ ...toggleStyle, color: "#94a3b8" }}>
               <input type="checkbox" checked={rotation} onChange={(event) => setRotation(event.target.checked)} />
               Rotazione settoriale, solo test informativo
@@ -189,6 +196,12 @@ export default function BacktestWidget() {
               ["Kelly medio", `${Number(sizingStats.avg_kelly_multiplier || 1).toFixed(2)}x`],
               ["Regime medio", `${Number(sizingStats.avg_regime_multiplier || 1).toFixed(2)}x`],
               ["APM Exit Proxy", apmStats.apm_exit_proxy_events || 0],
+              ["SI promossi", sectorIntelligenceStats.signals_promoted || 0],
+              ["SI esclusi", sectorIntelligenceStats.signals_penalized_out || 0],
+              ["SI posizioni promosse", sectorIntelligenceStats.promoted_positions || 0],
+              ["SI Win Rate", `${Number(sectorIntelligenceStats.promoted_win_rate || 0).toFixed(1)}%`],
+              ["SI Profit Factor", Number(sectorIntelligenceStats.promoted_profit_factor || 0).toFixed(2)],
+              ["SI P&L promosso", `$${Number(sectorIntelligenceStats.promoted_pnl_dollar || 0).toLocaleString()}`],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "#111827", borderRadius: 7, padding: 9, border: "1px solid #1e293b" }}>
                 <div style={{ color: "#64748b", fontSize: 9 }}>{label}</div>
@@ -201,7 +214,7 @@ export default function BacktestWidget() {
             Periodo richiesto {dataCoverage.requested_days || days}, eseguito {dataCoverage.executed_days || 0}; copertura {dataCoverage.tickers_complete || 0}/{dataCoverage.tickers_total || 0} ticker; barre min/mediana/max {dataCoverage.bars_min || 0}/{dataCoverage.bars_median || 0}/{dataCoverage.bars_max || 0}.
           </div>
           <div style={{ marginTop: 12, padding: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8" }}>
-            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}.
+            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}.
           </div>
 
           {(result.validation_notes || []).map((note) => (
