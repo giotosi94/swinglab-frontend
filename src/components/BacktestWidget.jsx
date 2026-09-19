@@ -67,6 +67,7 @@ export default function BacktestWidget() {
   const positionMetrics = result?.position_metrics || {};
   const apmStats = result?.apm_stats || {};
   const sizingStats = result?.sizing_stats || {};
+  const dataCoverage = result?.data_coverage || {};
   const chartData = (result?.equity_curve || []).map((point) => ({
     date: point.date,
     equity: point.equity,
@@ -110,7 +111,7 @@ export default function BacktestWidget() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
             <div>
               <label style={labelStyle}><span>Periodo</span><strong style={{ color: "white" }}>{days} giorni</strong></label>
-              <input type="range" min={90} max={250} step={10} value={days} onChange={(event) => setDays(Number(event.target.value))} style={sliderStyle} />
+              <input type="range" min={90} max={750} step={10} value={days} onChange={(event) => setDays(Number(event.target.value))} style={sliderStyle} />
             </div>
             <div>
               <label style={labelStyle}><span>Min Confluence</span><strong style={{ color: "white" }}>{minConf}</strong></label>
@@ -196,6 +197,9 @@ export default function BacktestWidget() {
             ))}
           </div>
 
+          <div style={{ marginTop: 12, padding: 10, background: dataCoverage.is_full_period ? "#052e16" : "#451a03", border: `1px solid ${dataCoverage.is_full_period ? "#166534" : "#92400e"}`, borderRadius: 8, fontSize: 11, color: dataCoverage.is_full_period ? "#86efac" : "#fbbf24" }}>
+            Periodo richiesto {dataCoverage.requested_days || days}, eseguito {dataCoverage.executed_days || 0}; copertura {dataCoverage.tickers_complete || 0}/{dataCoverage.tickers_total || 0} ticker; barre min/mediana/max {dataCoverage.bars_min || 0}/{dataCoverage.bars_median || 0}/{dataCoverage.bars_max || 0}.
+          </div>
           <div style={{ marginTop: 12, padding: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8" }}>
             Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}.
           </div>
