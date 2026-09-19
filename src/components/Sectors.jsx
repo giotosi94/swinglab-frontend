@@ -250,17 +250,31 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
         <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, overflow: 'hidden' }}>
           <div style={{ padding: 12, color: '#f8fafc', fontWeight: 800 }}>Best stock in {focusCode || 'settore'}</div>
           {focusedStocks.length === 0 && <div style={{ padding: 14, color: '#64748b', fontSize: 11 }}>Nessun asset disponibile.</div>}
-          {focusedStocks.map((stock) => (
-            <div key={stock.ticker} style={{ padding: '9px 12px', borderTop: '1px solid #1e293b' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ color: '#f8fafc', fontWeight: 800 }}>{stock.ticker}</span>
-                <span style={{ color: stock.score >= 48 ? '#34d399' : '#fbbf24', fontWeight: 800 }}>{stock.score}</span>
+          {focusedStocks.map((stock) => {
+            const approved = stock.status === 'CANDIDATE' && stock.alpha_confluence >= stock.threshold;
+            const missingSnapshot = stock.status === 'NO_ALPHA_SNAPSHOT';
+            return (
+              <div key={stock.ticker} style={{ padding: '10px 12px', borderTop: '1px solid #1e293b' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                  <span style={{ color: '#f8fafc', fontWeight: 800 }}>{stock.ticker}</span>
+                  <span style={{ color: approved ? '#34d399' : missingSnapshot ? '#94a3b8' : '#fbbf24', background: approved ? '#052e16' : missingSnapshot ? '#1e293b' : '#451a03', borderRadius: 6, padding: '3px 7px', fontSize: 9, fontWeight: 800 }}>
+                    {approved ? 'CANDIDATO' : missingSnapshot ? 'ATTESA SCAN' : 'SOTTO SOGLIA'}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 7 }}>
+                  <div style={{ color: '#64748b', fontSize: 9 }}>Setup<div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.score || 0).toFixed(1)}</div></div>
+                  <div style={{ color: '#64748b', fontSize: 9 }}>Pre-settore<div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.confluence_before_sector || 0).toFixed(1)}</div></div>
+                  <div style={{ color: '#64748b', fontSize: 9 }}>Finale<div style={{ color: approved ? '#34d399' : '#fbbf24', fontWeight: 800 }}>{Number(stock.alpha_confluence || 0).toFixed(1)}</div></div>
+                </div>
+                <div style={{ color: stock.sector_adjustment >= 0 ? '#34d399' : '#f87171', fontSize: 10, marginTop: 5 }}>
+                  Settore #{stock.sector_rank || '-'} | Adj {stock.sector_adjustment >= 0 ? '+' : ''}{Number(stock.sector_adjustment || 0).toFixed(1)} | {stock.sector_reason}
+                </div>
+                <div style={{ color: '#94a3b8', fontSize: 10, marginTop: 3 }}>
+                  {stock.setup_type} | RSI {stock.rsi} | Weekly {stock.weekly_trend} | R/R {Number(stock.risk_reward || 0).toFixed(2)}{stock.poc_shift ? ' | POC Shift' : ''}
+                </div>
               </div>
-              <div style={{ color: '#94a3b8', fontSize: 10, marginTop: 3 }}>
-                {stock.setup_type} | RSI {stock.rsi} | Weekly {stock.weekly_trend}{stock.poc_shift ? ' | POC Shift' : ''}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
