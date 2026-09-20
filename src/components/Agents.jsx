@@ -1,770 +1,190 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AGENT_INFO } from '../utils/constants';
 import { getRegimeColor } from '../utils/helpers';
-import { fetchApmHistory, fetchApmStatus, fetchApmSummary } from '../utils/api';
+import {
+  fetchApmHistory,
+  fetchApmStatus,
+  fetchApmSummary,
+  fetchMaxStrategyShadow,
+  fetchMaxStrategyRiskShadow,
+  fetchMaxStrategyValidation,
+} from '../utils/api';
 
-export default function Agents({
-  agentsStatus, agentsLoading, selectedAgent, setSelectedAgent,
-  agentDecisions, fetchAgentDecisions, fetchAgentsStatus,
-}) {
+const COLORS = {
+  bg: '#08101d', panel: '#0f172a', panel2: '#172235', border: '#23324a',
+  text: '#f8fafc', muted: '#8da0ba', green: '#22c55e', amber: '#f59e0b',
+  red: '#ef4444', blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316',
+};
+
+const panel = { background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: 14 };
+const compactCard = { background: COLORS.panel2, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 12 };
+
+function formatDate(value) {
+  if (!value) return 'Mai';
+  const normalized = typeof value === 'string' && !value.endsWith('Z') ? `${value}Z` : value;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('it-IT');
+}
+
+function money(value) {
+  const number = Number(value || 0);
+  return number.toLocaleString('it-IT', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
+function Kpi({ label, value, color = COLORS.text, hint }) {
+  return (
+    <div style={{ ...compactCard, minWidth: 0 }}>
+      <div style={{ color: COLORS.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
+      <div style={{ color, fontWeight: 800, fontSize: 18, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+      {hint && <div style={{ color: COLORS.muted, fontSize: 10, marginTop: 3 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function Badge({ children, color = COLORS.blue }) {
+  return <span style={{ color, background: `${color}18`, border: `1px solid ${color}40`, borderRadius: 999, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>{children}</span>;
+}
+
+function Reasoning({ title, text, color }) {
+  const [open, setOpen] = useState(false);
+  if (!text) return null;
+  const short = text.length > 220 ? `${text.slice(0, 220)}...` : text;
+  return (
+    <div style={{ ...compactCard, borderLeft: `3px solid ${color}`, marginTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+        <strong style={{ color, fontSize: 11 }}>{title}</strong>
+        {text.length > 220 && <button onClick={() => setOpen(!open)} style={{ background: 'none', border: 0, color: COLORS.muted, cursor: 'pointer', fontSize: 11 }}>{open ? 'Riduci' : 'Leggi tutto'}</button>}
+      </div>
+      <div style={{ color: '#c5d0df', fontSize: 12, lineHeight: 1.6, marginTop: 6, whiteSpace: 'pre-wrap' }}>{open ? text : short}</div>
+    </div>
+  );
+}
+
+export default function Agents({ agentsStatus, agentsLoading, selectedAgent, setSelectedAgent, agentDecisions, fetchAgentDecisions, fetchAgentsStatus }) {
+  const [tab, setTab] = useState('overview');
+  const [loadingExtra, setLoadingExtra] = useState(true);
+  const [apm, setApm] = useState({ status: null, summary: null, history: [] });
+  const [maxShadow, setMaxShadow] = useState(null);
+  const [riskShadow, setRiskShadow] = useState(null);
+  const [validation, setValidation] = useState(null);
+
   const ps = agentsStatus?.pipeline_state;
-  const ag = agentsStatus?.agents || {};
+  const agents = agentsStatus?.agents || {};
   const brain = agentsStatus?.shared_brain?.market || {};
   const market = { ...(ps?.market || {}), ...brain };
   const pipeline = ps?.pipeline || {};
   const brainRisk = agentsStatus?.shared_brain?.approved?.risk_report || {};
-  const riskReport = { ...(ps?.risk_report || {}), ...brainRisk };
+  const risk = { ...(ps?.risk_report || {}), ...brainRisk };
 
-  // 🆕 v4.0 — APM State
-  const [apmData, setApmData] = useState({
-    status: null,
-    summary: null,
-    history: [],
-    loading: true,
-  });
+  async function loadExtras() {
+    setLoadingExtra(true);
+    const [status, summary, history, alphaShadow, riskSizing, validationData] = await Promise.all([
+      fetchApmStatus(), fetchApmSummary(7), fetchApmHistory(8),
+      fetchMaxStrategyShadow(), fetchMaxStrategyRiskShadow(), fetchMaxStrategyValidation(100),
+    ]);
+    setApm({ status, summary, history: history?.decisions || [] });
+    setMaxShadow(alphaShadow);
+    setRiskShadow(riskSizing);
+    setValidation(validationData);
+    setLoadingExtra(false);
+  }
 
   useEffect(() => {
-    async function loadApm() {
-      const [status, summary, historyResp] = await Promise.all([
-        fetchApmStatus().catch(() => null),
-        fetchApmSummary(7).catch(() => null),
-        fetchApmHistory(5).catch(() => ({ decisions: [] })),
-      ]);
-      setApmData({
-        status,
-        summary,
-        history: historyResp?.decisions || [],
-        loading: false,
-      });
-    }
-    loadApm();
-    const interval = setInterval(loadApm, 60000);
+    loadExtras();
+    const interval = setInterval(loadExtras, 60000);
     return () => clearInterval(interval);
   }, [agentsStatus]);
 
-  if (agentsLoading && !agentsStatus) {
-    return (
-      <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
-        Loading agents...
-      </div>
-    );
-  }
+  const maxRows = useMemo(() => {
+    const alpha = maxShadow?.candidates || [];
+    const riskByTicker = Object.fromEntries((riskShadow?.candidates || []).map((item) => [item.ticker, item]));
+    return alpha
+      .filter((item) => item.shadow_action !== 'WOULD_REJECT' || item.plan_status !== 'DETECTED')
+      .map((item) => ({ ...item, risk: riskByTicker[item.ticker] }))
+      .slice(0, 100);
+  }, [maxShadow, riskShadow]);
+
+  const importantApm = (apm.history || []).filter((item) => item.decision !== 'HOLD').slice(0, 5);
+  const alphaCounts = maxShadow?.action_counts || {};
+  const riskCounts = riskShadow?.decision_counts || {};
+  const validationSummary = validation?.summary || {};
+  const systemState = agentsLoading || loadingExtra ? 'AGGIORNAMENTO' : Object.values(pipeline.steps || {}).includes('error') ? 'ATTENZIONE' : 'OPERATIVO';
+  const stateColor = systemState === 'OPERATIVO' ? COLORS.green : systemState === 'ATTENZIONE' ? COLORS.red : COLORS.amber;
+
+  if (agentsLoading && !agentsStatus) return <div style={{ padding: 40, color: COLORS.muted, textAlign: 'center' }}>Caricamento Control Center...</div>;
+
+  const tabs = [
+    ['overview', 'Panoramica'],
+    ['agents', 'Agenti'],
+    ['max', 'Max Strategy'],
+  ];
 
   return (
-    <div>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 20,
-          flexWrap: 'wrap',
-          gap: 10,
-        }}
-      >
-        <h2 style={{ margin: 0 }}>{'\uD83E\uDD16'} Multi-Agent AI System</h2>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={fetchAgentsStatus}
-            style={{
-              padding: '8px 16px',
-              background: '#1e293b',
-              color: '#94a3b8',
-              border: '1px solid #334155',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            {'\uD83D\uDD04'} Refresh
-          </button>
+    <div style={{ color: COLORS.text }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22 }}>Multi-Agent Control Center</h2>
+          <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>Ultima pipeline: {formatDate(ps?.last_run)} · {pipeline.timing?.total || 0}s</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Badge color={stateColor}>{systemState}</Badge>
+          <button onClick={() => { fetchAgentsStatus(); loadExtras(); }} style={{ background: COLORS.panel2, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer' }}>Aggiorna</button>
         </div>
       </div>
 
-      {/* Pipeline Steps — 🆕 v4.0 con APM */}
-      {ps && (
-        <div
-          style={{
-            background: '#0f172a',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 20,
-            border: '1px solid #1e293b',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
-            <span style={{ color: '#94a3b8', fontSize: 13 }}>
-              Last Run: {ps.last_run ? new Date(ps.last_run + (ps.last_run.endsWith('Z') ? '' : 'Z')).toLocaleString() : 'Never'}
-            </span>
-            <span style={{ color: '#94a3b8', fontSize: 13 }}>
-              {pipeline.timing?.total && `\u23F1 ${pipeline.timing.total}s`}
-            </span>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 0,
-              flexWrap: 'wrap',
-            }}
-          >
-            {['macro_analyst', 'alpha_strategist', 'risk_manager', 'adaptive_position_manager', 'executor'].map(
-              (name, i) => {
-                const info = AGENT_INFO[name];
-                if (!info) return null;
-                const st = pipeline.steps?.[name] || 'unknown';
-                const bc =
-                  st === 'ok'
-                    ? info.color
-                    : st === 'error'
-                    ? '#ef4444'
-                    : '#334155';
-                return (
-                  <React.Fragment key={name}>
-                    {i > 0 && (
-                      <div style={{ color: '#475569', fontSize: 20, margin: '0 4px' }}>
-                        {'\u2192'}
-                      </div>
-                    )}
-                    <div
-                      onClick={() => {
-                        setSelectedAgent(name);
-                        if (name !== 'adaptive_position_manager') {
-                          fetchAgentDecisions(name);
-                        }
-                      }}
-                      style={{
-                        background: '#1e293b',
-                        borderRadius: 10,
-                        padding: '10px 16px',
-                        border: `2px solid ${bc}`,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        minWidth: 120,
-                      }}
-                    >
-                      <div style={{ fontSize: 20 }}>{info.emoji}</div>
-                      <div
-                        style={{
-                          color: 'white',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          marginTop: 2,
-                        }}
-                      >
-                        {info.name}
-                      </div>
-                      <div style={{ color: bc, fontSize: 10, marginTop: 2 }}>
-                        {st === 'ok' ? '\u2705 OK' : st === 'error' ? '\u274C Error' : '\u23F3'}
-                      </div>
-                    </div>
-                  </React.Fragment>
-                );
-              }
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Market Context */}
-      {market.regime && (
-        <div
-          style={{
-            background: '#0f172a',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 20,
-            border: '1px solid #1e293b',
-          }}
-        >
-          <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>{'\uD83C\uDF0D'} Market Context</h3>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: 12,
-            }}
-          >
-            {[
-              { l: 'Regime', v: market.regime, c: getRegimeColor(market.regime) },
-              { l: 'Confidence', v: `${market.confidence || 0}%` },
-              {
-                l: 'Exposure',
-                v: `${((market.exposure_multiplier || 0) * 100).toFixed(0)}%`,
-              },
-              {
-                l: 'Volatility',
-                v: market.volatility || '\u2014',
-                c:
-                  market.volatility === 'EXTREME'
-                    ? '#ef4444'
-                    : market.volatility === 'HIGH'
-                    ? '#f97316'
-                    : '#22c55e',
-              },
-              { l: 'Breadth', v: `${market.breadth_pct || 0}%` },
-              {
-                l: 'Rotation',
-                v: market.rotation || '\u2014',
-                c: market.rotation === 'defensive' ? '#f97316' : '#22c55e',
-              },
-            ].map((item) => (
-              <div
-                key={item.l}
-                style={{
-                  background: '#1e293b',
-                  borderRadius: 8,
-                  padding: 12,
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>{item.l}</div>
-                <div
-                  style={{
-                    fontSize: item.l === 'Regime' ? 18 : 14,
-                    fontWeight: 700,
-                    color: item.c || 'white',
-                    marginTop: 4,
-                  }}
-                >
-                  {item.v}
-                </div>
-              </div>
-            ))}
-          </div>
-          {market.llm_reasoning && (
-            <div style={{
-              background: '#1e293b', borderRadius: 8, padding: 12, marginTop: 12,
-              borderLeft: '3px solid #8b5cf6', fontSize: 12, color: '#94a3b8', lineHeight: 1.6,
-            }}>
-              <span style={{ color: '#8b5cf6', fontWeight: 700, fontSize: 11 }}>🧠 AI Reasoning</span>
-              <div style={{ marginTop: 4 }}>{market.llm_reasoning}</div>
-            </div>
-          )}
-          {market.llm_reasoning && (
-            <div style={{ fontSize: 10, color: '#475569', marginTop: 4, fontStyle: 'italic' }}>
-              💬 Questo reasoning viene letto da Alpha, Risk, APM ed Executor
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Risk Report */}
-      {riskReport.equity && (
-        <div
-          style={{
-            background: '#0f172a',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 20,
-            border: '1px solid #1e293b',
-          }}
-        >
-          <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>
-            {'\uD83D\uDEE1\uFE0F'} Risk Report
-          </h3>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-              gap: 10,
-            }}
-          >
-            {[
-              { l: 'Equity', v: `$${riskReport.equity?.toLocaleString()}` },
-              { l: 'Cash', v: `$${riskReport.cash?.toLocaleString()}` },
-              { l: 'Exposure', v: `${riskReport.total_exposure_pct || 0}%` },
-              {
-                l: 'Positions',
-                v: `${riskReport.current_positions || 0}/${riskReport.max_positions || 5}`,
-              },
-              { l: 'Risk/Trade', v: `$${riskReport.risk_per_trade?.toFixed(0) || 0}` },
-              {
-                l: 'Multiplier',
-                v: `${((riskReport.final_multiplier || 0) * 100).toFixed(0)}%`,
-              },
-            ].map((item) => (
-              <div
-                key={item.l}
-                style={{
-                  background: '#1e293b',
-                  borderRadius: 8,
-                  padding: 10,
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: 10, color: '#94a3b8' }}>{item.l}</div>
-                <div
-                  style={{ fontSize: 14, fontWeight: 600, color: 'white', marginTop: 2 }}
-                >
-                  {item.v}
-                </div>
-                </div>
-            ))}
-          </div>
-          {riskReport.llm_reasoning && (
-            <div style={{
-              background: '#1e293b', borderRadius: 8, padding: 12, marginTop: 12,
-              borderLeft: '3px solid #eab308', fontSize: 12, color: '#94a3b8', lineHeight: 1.6,
-            }}>
-              <span style={{ color: '#eab308', fontWeight: 700, fontSize: 11 }}>🛡️ Risk AI Reasoning</span>
-              <div style={{ marginTop: 4 }}>{riskReport.llm_reasoning}</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 🆕 v4.0 — APM Report */}
-      {apmData.status && (
-        <div style={{
-          background: 'linear-gradient(135deg, #1e1b3a 0%, #0f172a 100%)',
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 20,
-          border: '2px solid #8b5cf6',
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 12,
-            flexWrap: 'wrap',
-            gap: 8,
-          }}>
-            <h3 style={{ margin: 0, fontSize: 15, color: '#8b5cf6' }}>
-              🎯 Adaptive Position Manager (APM)
-            </h3>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{
-                padding: '3px 10px',
-                borderRadius: 6,
-                fontSize: 10,
-                fontWeight: 700,
-                background: apmData.status.enabled ? '#22c55e22' : '#ef444422',
-                color: apmData.status.enabled ? '#22c55e' : '#ef4444',
-                border: `1px solid ${apmData.status.enabled ? '#22c55e44' : '#ef444444'}`,
-              }}>
-                {apmData.status.enabled ? '✅ ENABLED' : '❌ DISABLED'}
-              </span>
-              {apmData.status.remaining_hours !== null && apmData.status.remaining_hours !== undefined && (
-                <span style={{
-                  padding: '3px 10px',
-                  borderRadius: 6,
-                  fontSize: 10,
-                  background: '#3b82f622',
-                  color: '#3b82f6',
-                  border: '1px solid #3b82f644',
-                }}>
-                  ⏰ Next: {apmData.status.remaining_hours}h
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Stats */}
-          {apmData.summary && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
-              gap: 8,
-              marginBottom: 12,
-            }}>
-              {[
-                { l: 'Total', v: apmData.summary.total_decisions, c: 'white' },
-                { l: 'Actions', v: apmData.summary.actions_taken, c: '#f97316' },
-                { l: 'HOLD', v: apmData.summary.counts?.HOLD || 0, c: '#22c55e' },
-                { l: 'Scale', v: apmData.summary.counts?.SCALE_OUT || 0, c: '#eab308' },
-                { l: 'Exit', v: apmData.summary.counts?.EXIT || 0, c: '#ef4444' },
-                { l: 'Tighten', v: apmData.summary.counts?.TIGHTEN_STOP || 0, c: '#f97316' },
-              ].map((item) => (
-                <div key={item.l} style={{
-                  background: '#1e293b',
-                  borderRadius: 8,
-                  padding: 10,
-                  textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>{item.l}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: item.c, marginTop: 2 }}>
-                    {item.v}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Latest 3 decisions */}
-          {apmData.history.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 6 }}>
-                📋 Latest 5 Decisions
-              </div>
-              {apmData.history.slice(0, 5).map((d) => {
-                const colors = {
-                  HOLD: '#22c55e',
-                  EXIT: '#ef4444',
-                  SCALE_OUT: '#eab308',
-                  TIGHTEN_STOP: '#f97316',
-                };
-                const emojis = {
-                  HOLD: '🟢',
-                  EXIT: '🔴',
-                  SCALE_OUT: '🟡',
-                  TIGHTEN_STOP: '🛡️',
-                };
-                const color = colors[d.decision] || '#64748b';
-                const emoji = emojis[d.decision] || '⚪';
-                return (
-                  <div key={d.id} style={{
-                    background: '#1e293b',
-                    borderRadius: 6,
-                    padding: 8,
-                    marginBottom: 4,
-                    fontSize: 11,
-                    borderLeft: `3px solid ${color}`,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 6,
-                  }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 12 }}>{emoji}</span>
-                      <span style={{ fontWeight: 700, color: 'white' }}>{d.ticker}</span>
-                      <span style={{
-                        padding: '1px 6px',
-                        borderRadius: 4,
-                        fontSize: 9,
-                        fontWeight: 700,
-                        background: color + '22',
-                        color: color,
-                      }}>
-                        {d.decision}
-                      </span>
-                      <span style={{
-                        color: d.current_pnl_pct >= 0 ? '#22c55e' : '#ef4444',
-                        fontWeight: 700,
-                      }}>
-                        {d.current_pnl_pct >= 0 ? '+' : ''}{d.current_pnl_pct?.toFixed(2)}%
-                      </span>
-                    </div>
-                    <span style={{ color: '#64748b', fontSize: 10 }}>
-                      {d.created_at ? new Date(d.created_at + 'Z').toLocaleString('en-US', {
-                        month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
-                      }) : ''}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Info banner */}
-          <div style={{
-            padding: '8px 10px',
-            background: '#8b5cf61a',
-            border: '1px solid #8b5cf644',
-            borderRadius: 8,
-            fontSize: 11,
-            color: '#c4b5fd',
-          }}>
-            💬 APM rivaluta ogni <strong>{apmData.status.interval_hours}h</strong> tutte le posizioni aperte con LLM reasoning italiano. Decide HOLD/SCALE OUT/EXIT/TIGHTEN in modo adattivo.
-          </div>
-        </div>
-      )}
-
-      {/* Agent Cards */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
-        {Object.entries(AGENT_INFO).map(([name, info]) => {
-          const ad = ag[name] || {};
-          const p = ad.params || {};
-          const rc = ad.recent_decisions?.length || 0;
-          const is_ = selectedAgent === name;
-          return (
-            <div
-              key={name}
-              onClick={() => {
-                setSelectedAgent(is_ ? null : name);
-                if (!is_ && name !== 'adaptive_position_manager') {
-                  fetchAgentDecisions(name);
-                }
-              }}
-              style={{
-                background: '#0f172a',
-                borderRadius: 12,
-                padding: 16,
-                border: `2px solid ${is_ ? info.color : '#1e293b'}`,
-                cursor: 'pointer',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 10,
-                }}
-              >
-                <div>
-                  <span style={{ fontSize: 18, marginRight: 6 }}>{info.emoji}</span>
-                  <span style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>
-                    {info.name}
-                  </span>
-                </div>
-                <span style={{ color: '#64748b', fontSize: 11 }}>{rc} decisions</span>
-              </div>
-              <div style={{ color: '#64748b', fontSize: 11, marginBottom: 10 }}>
-                {info.desc}
-              </div>
-
-              {name === 'macro_analyst' && p.w_spy_trend && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {[
-                    { l: 'SPY', v: p.w_spy_trend },
-                    { l: 'Breadth', v: p.w_breadth },
-                    { l: 'VIX', v: p.w_vix },
-                  ].map((w) => (
-                    <span
-                      key={w.l}
-                      style={{
-                        background: '#1e293b',
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        fontSize: 10,
-                        color: '#94a3b8',
-                      }}
-                    >
-                      {w.l}: {((w.v || 0) * 100).toFixed(0)}%
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {name === 'alpha_strategist' && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Min Conf: {p.min_confluence || 48}
-                  </span>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Max RSI: {p.max_rsi_entry || 68}
-                  </span>
-                  {(p.best_setups || []).slice(0, 2).map((s) => (
-                    <span
-                      key={s}
-                      style={{
-                        background: '#22c55e15',
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        fontSize: 10,
-                        color: '#22c55e',
-                      }}
-                    >
-                      {s}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {name === 'risk_manager' && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Risk: {p.risk_pct_per_trade || 3}%
-                  </span>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    R/R{'\u2265'}{p.min_risk_reward || 1.3}
-                  </span>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Max: {p.max_positions || 12} pos
-                  </span>
-                </div>
-              )}
-
-              {name === 'adaptive_position_manager' && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Check: {p.apm_check_interval_hours || 1}h
-                  </span>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Exit Conf: {p.apm_exit_confluence_threshold || 25}
-                  </span>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: p.apm_enabled !== false ? '#8b5cf6' : '#ef4444' }}>
-                    {p.apm_enabled !== false ? '✅ ON' : '❌ OFF'}
-                  </span>
-                </div>
-              )}
-
-              {name === 'executor' && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: '#94a3b8' }}>
-                    Buffer: {p.limit_price_buffer_pct || 0.5}%
-                  </span>
-                  <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontSize: 10, color: p.send_telegram !== false ? '#22c55e' : '#ef4444' }}>
-                    {p.send_telegram !== false ? '\uD83D\uDCF1 TG On' : '\uD83D\uDCF1 TG Off'}
-                  </span>
-                </div>
-              )}
-            </div>
-          );
+      <div style={{ ...panel, padding: 10, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto' }}>
+        {['macro_analyst', 'alpha_strategist', 'risk_manager', 'adaptive_position_manager', 'executor'].map((name, index) => {
+          const info = AGENT_INFO[name];
+          const status = pipeline.steps?.[name] || 'unknown';
+          if (!info) return null;
+          const color = status === 'ok' ? info.color : status === 'error' ? COLORS.red : COLORS.muted;
+          return <React.Fragment key={name}>{index > 0 && <span style={{ color: '#43516a' }}>→</span>}<button onClick={() => { setTab('agents'); setSelectedAgent(name); if (name !== 'adaptive_position_manager') fetchAgentDecisions(name); }} style={{ flex: 1, minWidth: 125, background: selectedAgent === name ? `${color}18` : 'transparent', border: 0, borderBottom: `2px solid ${color}`, color: COLORS.text, borderRadius: 8, padding: 9, cursor: 'pointer', textAlign: 'left' }}><span>{info.emoji}</span> <strong style={{ fontSize: 11 }}>{info.name}</strong><div style={{ color, fontSize: 9, marginTop: 3 }}>{status === 'ok' ? 'OK' : status.toUpperCase()}</div></button></React.Fragment>;
         })}
       </div>
 
-      {/* Selected Agent Decisions */}
-      {selectedAgent && selectedAgent !== 'adaptive_position_manager' && (
-        <div
-          style={{
-            background: '#0f172a',
-            borderRadius: 12,
-            padding: 16,
-            border: `1px solid ${AGENT_INFO[selectedAgent]?.color || '#334155'}`,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: 15 }}>
-              {AGENT_INFO[selectedAgent]?.emoji} {AGENT_INFO[selectedAgent]?.name} — Recent
-              Decisions
-            </h3>
-            <button
-              onClick={() => setSelectedAgent(null)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#64748b',
-                cursor: 'pointer',
-                fontSize: 16,
-              }}
-            >
-              {'\u2715'}
-            </button>
-          </div>
-          {agentDecisions.length === 0 ? (
-            <div style={{ color: '#64748b', textAlign: 'center', padding: 20 }}>
-              No decisions yet
-            </div>
-          ) : (
-            <div style={{ maxHeight: 400, overflow: 'auto' }}>
-              {agentDecisions.map((d, i) => (
-                <div
-                  key={d._id || i}
-                  style={{
-                    background: '#1e293b',
-                    borderRadius: 8,
-                    padding: 10,
-                    marginBottom: 8,
-                    fontSize: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      marginBottom: 4,
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: AGENT_INFO[selectedAgent]?.color,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {d.type}
-                    </span>
-                    <span style={{ color: '#64748b' }}>
-                      {d.created_at ? new Date(d.created_at + (d.created_at.endsWith('Z') ? '' : 'Z')).toLocaleString() : ''}
-                    </span>
-                  </div>
-                  <div style={{ color: '#94a3b8', marginBottom: 4 }}>{d.reasoning}</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <span style={{ color: '#64748b' }}>
-                      Confidence: {d.confidence?.toFixed(0) || 0}%
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto' }}>
+        {tabs.map(([key, label]) => <button key={key} onClick={() => setTab(key)} style={{ color: tab === key ? COLORS.text : COLORS.muted, background: tab === key ? COLORS.panel2 : 'transparent', border: `1px solid ${tab === key ? COLORS.blue : COLORS.border}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontWeight: 700 }}>{label}</button>)}
+      </div>
 
-      {/* Executor AI Reasoning */}
-      {agentsStatus?.shared_brain?.executions?.details?.llm_reasoning && (
-        <div style={{
-          background: '#0f172a', borderRadius: 12, padding: 16, marginTop: 20, border: '1px solid #1e293b',
-        }}>
-          <div style={{
-            background: '#1e293b', borderRadius: 8, padding: 12,
-            borderLeft: '3px solid #f97316', fontSize: 12, color: '#94a3b8', lineHeight: 1.6,
-          }}>
-            <span style={{ color: '#f97316', fontWeight: 700, fontSize: 11 }}>⚡ Executor AI Reasoning</span>
-            <div style={{ marginTop: 4 }}>{agentsStatus.shared_brain.executions.details.llm_reasoning}</div>
-          </div>
+      {tab === 'overview' && <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10, marginBottom: 14 }}>
+          <Kpi label="Regime" value={market.regime || 'N/D'} color={getRegimeColor(market.regime)} hint={`Confidenza ${market.confidence || 0}%`} />
+          <Kpi label="Esposizione" value={`${risk.total_exposure_pct || 0}%`} hint={`${risk.current_positions || 0}/${risk.max_positions || 0} posizioni`} />
+          <Kpi label="Equity" value={money(risk.equity)} hint={`Cash ${money(risk.cash)}`} />
+          <Kpi label="Max Armed" value={alphaCounts.WOULD_ARM || 0} color={COLORS.blue} hint="Piani in attesa trigger" />
+          <Kpi label="Max Would Buy" value={alphaCounts.WOULD_BUY || 0} color={COLORS.green} hint="Shadow, ordini OFF" />
+          <Kpi label="Risk Shadow" value={(riskCounts.WOULD_APPROVE || 0) + (riskCounts.WOULD_REDUCE || 0)} color={COLORS.purple} hint={`${riskCounts.WOULD_REJECT || 0} rifiutati`} />
         </div>
-      )}
-      
-      {/* Last Actions */}
-      {ps?.actions?.length > 0 && (
-        <div
-          style={{
-            background: '#0f172a',
-            borderRadius: 12,
-            padding: 16,
-            marginTop: 20,
-            border: '1px solid #1e293b',
-          }}
-        >
-          <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>{'\uD83D\uDCCB'} Last Actions</h3>
-          {ps.actions.map((a, i) => (
-            <div
-              key={i}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: '#1e293b',
-                borderRadius: 6,
-                padding: 8,
-                marginBottom: 6,
-                fontSize: 12,
-              }}
-            >
-              <span
-                style={{
-                  color: a.action === 'BUY' ? '#22c55e' : '#ef4444',
-                  fontWeight: 700,
-                }}
-              >
-                {a.action} {a.ticker}
-              </span>
-              <span style={{ color: '#94a3b8' }}>
-                {a.shares && `${a.shares} shares`} {a.reason || ''}{' '}
-                {a.pnl_pct
-                  ? `(${a.pnl_pct > 0 ? '+' : ''}${a.pnl_pct}%)`
-                  : ''}
-              </span>
-            </div>
-          ))}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}>
+          <section style={{ ...panel, padding: 14 }}><h3 style={{ margin: 0, fontSize: 14 }}>Contesto di mercato</h3><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}><Badge color={getRegimeColor(market.regime)}>{market.regime || 'N/D'}</Badge><Badge>Volatilità {market.volatility || 'N/D'}</Badge><Badge>Breadth {market.breadth_pct || 0}%</Badge><Badge>Exposure {Math.round((market.exposure_multiplier || 0) * 100)}%</Badge></div><Reasoning title="Analisi Macro" text={market.llm_reasoning} color={COLORS.purple} /></section>
+          <section style={{ ...panel, padding: 14 }}><h3 style={{ margin: 0, fontSize: 14 }}>Rischio e capacità</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 10 }}><Kpi label="Cash" value={money(risk.cash)} /><Kpi label="Risk/Trade" value={money(risk.risk_per_trade_usd || risk.risk_per_trade)} /><Kpi label="Moltiplicatore" value={`${Math.round((risk.final_multiplier || 0) * 100)}%`} /></div><Reasoning title="Analisi Risk" text={risk.llm_reasoning} color={COLORS.amber} /></section>
         </div>
-      )}
+
+        <section style={{ ...panel, padding: 14, marginTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}><div><h3 style={{ margin: 0, fontSize: 14 }}>APM · Azioni rilevanti</h3><span style={{ color: COLORS.muted, fontSize: 10 }}>Gli HOLD restano in secondo piano</span></div><div style={{ display: 'flex', gap: 6 }}><Badge color={apm.status?.enabled ? COLORS.green : COLORS.red}>{apm.status?.enabled ? 'ATTIVO' : 'OFF'}</Badge><Badge color={COLORS.purple}>Prossimo {apm.status?.remaining_hours ?? '-'}h</Badge></div></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginTop: 10 }}><Kpi label="Scale" value={apm.summary?.counts?.SCALE_OUT || 0} color={COLORS.amber} /><Kpi label="Exit" value={apm.summary?.counts?.EXIT || 0} color={COLORS.red} /><Kpi label="Tighten" value={apm.summary?.counts?.TIGHTEN_STOP || 0} color={COLORS.orange} /><Kpi label="Hold" value={apm.summary?.counts?.HOLD || 0} color={COLORS.muted} /></div>
+          <div style={{ marginTop: 10 }}>{importantApm.length ? importantApm.map((item, index) => <div key={item.id || index} style={{ ...compactCard, display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 6, fontSize: 11 }}><strong>{item.ticker} · {item.decision}</strong><span style={{ color: Number(item.current_pnl_pct) >= 0 ? COLORS.green : COLORS.red }}>{Number(item.current_pnl_pct || 0).toFixed(2)}%</span></div>) : <div style={{ color: COLORS.muted, fontSize: 11, padding: 10 }}>Nessuna azione APM rilevante recente.</div>}</div>
+        </section>
+      </>}
+
+      {tab === 'agents' && <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
+          {Object.entries(AGENT_INFO).map(([name, info]) => {
+            const data = agents[name] || {};
+            const active = selectedAgent === name;
+            return <button key={name} onClick={() => { setSelectedAgent(active ? null : name); if (!active && name !== 'adaptive_position_manager') fetchAgentDecisions(name); }} style={{ ...panel, padding: 14, color: COLORS.text, cursor: 'pointer', textAlign: 'left', border: `1px solid ${active ? info.color : COLORS.border}` }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><strong>{info.emoji} {info.name}</strong><span style={{ color: COLORS.muted, fontSize: 10 }}>{data.recent_decisions?.length || 0} decisioni</span></div><div style={{ color: COLORS.muted, fontSize: 11, marginTop: 8, minHeight: 30 }}>{info.desc}</div><div style={{ marginTop: 10 }}><Badge color={pipeline.steps?.[name] === 'ok' ? COLORS.green : COLORS.muted}>{pipeline.steps?.[name] || 'unknown'}</Badge></div></button>;
+          })}
+        </div>
+        {selectedAgent && selectedAgent !== 'adaptive_position_manager' && <section style={{ ...panel, padding: 14, marginTop: 14, borderColor: AGENT_INFO[selectedAgent]?.color }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><h3 style={{ margin: 0, fontSize: 14 }}>{AGENT_INFO[selectedAgent]?.emoji} {AGENT_INFO[selectedAgent]?.name} · Decisioni</h3><button onClick={() => setSelectedAgent(null)} style={{ background: 'none', border: 0, color: COLORS.muted, cursor: 'pointer' }}>Chiudi</button></div><div style={{ marginTop: 10, maxHeight: 460, overflowY: 'auto' }}>{agentDecisions.length ? agentDecisions.map((item, index) => <div key={item._id || index} style={{ ...compactCard, marginBottom: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ color: AGENT_INFO[selectedAgent]?.color, fontSize: 11 }}>{item.type}</strong><span style={{ color: COLORS.muted, fontSize: 10 }}>{formatDate(item.created_at)}</span></div><div style={{ color: '#c5d0df', fontSize: 11, lineHeight: 1.5, marginTop: 5 }}>{item.reasoning}</div><div style={{ color: COLORS.muted, fontSize: 10, marginTop: 5 }}>Confidence {Number(item.confidence || 0).toFixed(0)}%</div></div>) : <div style={{ color: COLORS.muted }}>Nessuna decisione.</div>}</div></section>}
+      </>}
+
+      {tab === 'max' && <>
+        <div style={{ ...panel, padding: 14, marginBottom: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}><div><h3 style={{ margin: 0, fontSize: 15 }}>Max Strategy v1.5.2</h3><div style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>Weekly context · Daily confirmation · 4H refined con fallback Daily</div></div><div style={{ display: 'flex', gap: 6 }}><Badge color={COLORS.purple}>SHADOW</Badge><Badge color={COLORS.red}>ORDINI LIVE OFF</Badge></div></div></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 8, marginBottom: 12 }}><Kpi label="Would Arm" value={alphaCounts.WOULD_ARM || 0} color={COLORS.blue} /><Kpi label="Would Buy" value={alphaCounts.WOULD_BUY || 0} color={COLORS.green} /><Kpi label="Would Wait" value={alphaCounts.WOULD_WAIT || 0} color={COLORS.amber} /><Kpi label="Would Reject" value={alphaCounts.WOULD_REJECT || 0} color={COLORS.red} /><Kpi label="Risk Approve" value={riskCounts.WOULD_APPROVE || 0} color={COLORS.green} /><Kpi label="Risk Reduce" value={riskCounts.WOULD_REDUCE || 0} color={COLORS.amber} /><Kpi label="Risk Reject" value={riskCounts.WOULD_REJECT || 0} color={COLORS.red} /></div>
+        <section style={{ ...panel, padding: 12, overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1050, fontSize: 11 }}><thead><tr style={{ color: COLORS.muted, textAlign: 'left' }}>{['Ticker','Alpha','Risk','Piano','Fase','Prezzo','Trigger','Max entry','Invalidazione','Size teorica','Rischio','Motivo'].map((label) => <th key={label} style={{ padding: '8px 7px', borderBottom: `1px solid ${COLORS.border}` }}>{label}</th>)}</tr></thead><tbody>{maxRows.map((row) => <tr key={row.ticker} style={{ borderBottom: `1px solid ${COLORS.border}` }}><td style={{ padding: 8, fontWeight: 800 }}>{row.ticker}</td><td><Badge color={row.shadow_action === 'WOULD_BUY' ? COLORS.green : row.shadow_action === 'WOULD_ARM' ? COLORS.blue : row.shadow_action === 'WOULD_REJECT' ? COLORS.red : COLORS.amber}>{row.shadow_action}</Badge></td><td>{row.risk ? <Badge color={row.risk.risk_shadow_decision === 'WOULD_APPROVE' ? COLORS.green : row.risk.risk_shadow_decision === 'WOULD_REDUCE' ? COLORS.amber : COLORS.red}>{row.risk.risk_shadow_decision}</Badge> : '—'}</td><td>{row.plan_status}</td><td>{row.market_phase || '—'}</td><td>{row.signal_price ?? '—'}</td><td>{row.trigger_price ?? '—'}</td><td>{row.maximum_entry_price ?? '—'}</td><td>{row.invalidation_price ?? '—'}</td><td>{row.risk ? `${row.risk.shadow_qty} · ${money(row.risk.shadow_notional)}` : '—'}</td><td>{row.risk ? `${money(row.risk.shadow_risk_usd)} (${row.risk.portfolio_risk_pct}%)` : '—'}</td><td style={{ color: COLORS.muted, maxWidth: 260 }}>{(row.risk?.rejection_reasons?.length ? row.risk.rejection_reasons : row.rejection_reasons || []).join(', ') || '—'}</td></tr>)}</tbody></table>{!maxRows.length && <div style={{ padding: 24, textAlign: 'center', color: COLORS.muted }}>Nessun candidato Shadow disponibile. Se la route Risk Shadow non è ancora esposta, la pagina continuerà a mostrare i dati Alpha e Validation.</div>}</section>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginTop: 12 }}><Kpi label="Snapshot point-in-time" value={validationSummary.total || 0} hint="max_strategy_signals" /><Kpi label="Trigger raggiunti" value={validationSummary.trigger_reached || 0} /><Kpi label="Invalidazioni" value={validationSummary.invalidation_reached || 0} color={COLORS.red} /><Kpi label="Outcome 5/10/20d" value={`${validationSummary.completed_5d || 0}/${validationSummary.completed_10d || 0}/${validationSummary.completed_20d || 0}`} /></div>
+      </>}
     </div>
   );
 }
