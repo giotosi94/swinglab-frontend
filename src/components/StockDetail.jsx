@@ -4,7 +4,18 @@ import { fetchNews } from '../utils/api';
 import TradingViewChart from './TradingViewChart';
 
 const money = (value) => value == null ? 'N/D' : `$${Number(value).toFixed(2)}`;
-const value = (input, fallback = 'N/D') => input == null ? fallback : input;
+const value = (input, fallback = 'N/D') => {
+  if (input == null) return fallback;
+  if (typeof input === 'string' || typeof input === 'number') return input;
+  if (typeof input === 'boolean') return input ? 'Sì' : 'No';
+  if (Array.isArray(input)) return input.map((item) => value(item, '')).filter(Boolean).join(', ') || fallback;
+  if (typeof input === 'object') {
+    const preferred = input.value ?? input.current ?? input.phase ?? input.state ?? input.signal ?? input.macd ?? input.histogram;
+    if (preferred != null && typeof preferred !== 'object') return preferred;
+    return Object.entries(input).map(([key, item]) => `${key}: ${typeof item === 'object' ? JSON.stringify(item) : item}`).join(' · ');
+  }
+  return String(input);
+};
 
 function Pill({ children, color = '#94a3b8' }) {
   return <span style={{ background: `${color}18`, color, border: `1px solid ${color}45`, borderRadius: 6, padding: '3px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>;
@@ -43,7 +54,7 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
 
   const max = stock.max_strategy || {};
   const plan = max.entry_plan || {};
-  const phaseLabel = typeof max.market_phase === 'string' ? max.market_phase : (max.market_phase?.phase || max.market_phase?.state || 'N/D');
+  const phaseLabel = value(typeof max.market_phase === 'string' ? max.market_phase : (max.market_phase?.phase || max.market_phase?.state), 'N/D');
   const weekly = max.weekly_context || {};
   const daily = max.daily_confirmation || {};
   const execution = max.execution_4h || {};
@@ -102,12 +113,12 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
           <Metric label="Trigger">{money(plan.trigger_price)}</Metric>
           <Metric label="Maximum entry">{money(plan.maximum_entry_price)}</Metric>
           <Metric label="Invalidazione" color="#ef4444">{money(plan.invalidation_price)}</Metric>
-          <Metric label="Weekly">{weekly.structural_state || weekly.state || 'N/D'}</Metric>
-          <Metric label="Daily">{daily.confirmed ? 'CONFERMATO' : daily.state || 'ATTESA'}</Metric>
-          <Metric label="4H">{execution.available === false ? 'FALLBACK DAILY' : execution.state || plan.execution_mode || 'N/D'}</Metric>
-          <Metric label="Ordine teorico">{plan.order_action || 'WAIT'}</Metric>
+          <Metric label="Weekly">{value(weekly.structural_state || weekly.state)}</Metric>
+          <Metric label="Daily">{daily.confirmed ? 'CONFERMATO' : value(daily.state, 'ATTESA')}</Metric>
+          <Metric label="4H">{execution.available === false ? 'FALLBACK DAILY' : value(execution.state || plan.execution_mode)}</Metric>
+          <Metric label="Ordine teorico">{value(plan.order_action, 'WAIT')}</Metric>
         </div>
-        {(max.rejection_reasons || []).length > 0 && <div style={{ color: '#fca5a5', fontSize: 10, marginTop: 10 }}>Gate: {max.rejection_reasons.join(' · ')}</div>}
+        {(max.rejection_reasons || []).length > 0 && <div style={{ color: '#fca5a5', fontSize: 10, marginTop: 10 }}>Gate: {value(max.rejection_reasons)}</div>}
       </Section>
 
       <div style={{ marginBottom: 14 }}>
@@ -154,7 +165,7 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
             <div>EMA 10 / 20 / 50: {value(stock.ema10)} · {value(stock.ema20)} · {value(stock.ema50)}</div>
             <div>MACD: {value(stock.macd)} · Segnale: {value(stock.macd_signal)}</div>
             <div>Pattern: {(stock.candlestick_patterns || []).map((pattern) => pattern.name).join(', ') || 'Nessuno'}</div>
-            {stock.llm_analysis && <div style={{ marginTop: 8, padding: 10, background: '#111827', borderRadius: 7 }}>{stock.llm_analysis}</div>}
+            {stock.llm_analysis && <div style={{ marginTop: 8, padding: 10, background: '#111827', borderRadius: 7 }}>{value(stock.llm_analysis)}</div>}
           </div>
         )}
       </Section>
