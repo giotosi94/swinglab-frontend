@@ -38,6 +38,9 @@ export const runTrader = () => post('/api/data/autotrader/run');
 export const searchStock = (query) => get(`/api/data/search/${query.trim().toUpperCase()}`);
 export const fetchAllTickers = () => get('/api/data/tickers/list');
 
+export const fetchAssetsOverview = (limit = 305) =>
+  get(`/api/assets/overview?limit=${limit}`);
+
 export async function fetchSectorsAndAssets(limit = 250) {
   try {
     const [sRes, aRes] = await Promise.all([
