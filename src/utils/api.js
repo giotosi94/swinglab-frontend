@@ -38,7 +38,7 @@ export const runTrader = () => post('/api/data/autotrader/run');
 export const searchStock = (query) => get(`/api/data/search/${query.trim().toUpperCase()}`);
 export const fetchAllTickers = () => get('/api/data/tickers/list');
 
-export async function fetchSectorsAndAssets(limit = 350) {
+export async function fetchSectorsAndAssets(limit = 305) {
   try {
     const [sRes, aRes] = await Promise.all([
       fetch(`${API}/api/sectors`),
