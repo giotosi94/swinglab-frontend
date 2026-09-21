@@ -16,9 +16,10 @@ import * as api from './utils/api';
 function App() {
   const toast = useToast();
 
-  // ===== STATE =====
   const [sectors, setSectors] = useState([]);
   const [assets, setAssets] = useState([]);
+  const [stockAssets, setStockAssets] = useState([]);
+  const [stockAssetsLoading, setStockAssetsLoading] = useState(false);
   const [view, setView] = useState('dashboard');
   const [selectedSector, setSelectedSector] = useState(null);
   const [selectedStock, setSelectedStock] = useState(null);
@@ -26,7 +27,6 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [traderData, setTraderData] = useState(null);
-  const [traderLoading, setTraderLoading] = useState(false);
   const [alpacaData, setAlpacaData] = useState(null);
   const [livePrices, setLivePrices] = useState({});
   const [equityPeriods, setEquityPeriods] = useState({});
@@ -36,13 +36,11 @@ function App() {
   const [trendPredictions, setTrendPredictions] = useState({});
   const [stockLoading, setStockLoading] = useState(false);
 
-  // Agents
   const [agentsStatus, setAgentsStatus] = useState(null);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [agentDecisions, setAgentDecisions] = useState([]);
 
-  // Settings
   const [settings, setSettings] = useState({
     max_positions: 5,
     risk_pct_per_trade: 2,
@@ -55,7 +53,6 @@ function App() {
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
 
-  // ===== FETCH FUNCTIONS (21A: tutte via api.js) =====
   const refreshMarket = async () => {
     const d = await api.fetchMarket();
     if (d && typeof d === 'object') setMarketData(d);
@@ -91,6 +88,14 @@ function App() {
     setLoading(false);
   };
 
+  const refreshStockOverview = async () => {
+    if (stockAssetsLoading) return;
+    setStockAssetsLoading(true);
+    const data = await api.fetchAssetsOverview(305);
+    if (Array.isArray(data)) setStockAssets(data);
+    setStockAssetsLoading(false);
+  };
+
   const refreshMlPredictions = async () => {
     const d = await api.fetchMlPredictions();
     if (d && d.top_20) {
@@ -121,7 +126,6 @@ function App() {
     if (d && !d.error && d.max_positions) setSettings((p) => ({ ...p, ...d }));
   };
 
-  // ===== ACTIONS =====
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -136,7 +140,6 @@ function App() {
     setSearchQuery('');
   };
 
-  // 21D: Loading state per stock detail
   const loadFullStock = async (ticker) => {
     setStockLoading(true);
     const d = await api.searchStock(ticker);
@@ -167,7 +170,6 @@ function App() {
     return false;
   };
 
-  // ===== EFFECTS =====
   useEffect(() => {
     refreshData();
     refreshTrader();
@@ -183,6 +185,7 @@ function App() {
     const p = setInterval(refreshLivePrices, 15000);
     const a = setInterval(refreshAlpaca, 60000);
     const d = setInterval(refreshData, 300000);
+
     return () => {
       clearInterval(p);
       clearInterval(a);
@@ -193,16 +196,15 @@ function App() {
 
   useEffect(() => {
     if (view === 'agents') refreshAgentsStatus();
+    if (view === 'stocks' && stockAssets.length === 0) refreshStockOverview();
     // eslint-disable-next-line
   }, [view]);
 
-  // ===== RENDER HELPERS =====
   const handleDashboardStockSelect = (stock) => {
     setSelectedStock(stock);
     setView('stocks');
   };
 
-  // ===== MAIN RENDER =====
   return (
     <div style={{
       background: '#0a0e17', minHeight: '100vh', color: 'white',
@@ -218,7 +220,6 @@ function App() {
       />
 
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: 20 }}>
-        {/* 21D: Stock loading overlay */}
         {stockLoading && (
           <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -258,7 +259,7 @@ function App() {
           />
         ) : view === 'stocks' ? (
           <Stocks
-            assets={assets}
+            assets={stockAssets.length > 0 ? stockAssets : assets}
             selectedSector={selectedSector} setSelectedSector={setSelectedSector}
             selectedStock={selectedStock} setSelectedStock={setSelectedStock}
             livePrices={livePrices}
