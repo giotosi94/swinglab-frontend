@@ -2,14 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { getScoreColor, getSetupBadge } from '../utils/helpers';
 import StockDetail from './StockDetail';
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 30;
 const money = (input) => input == null ? 'N/D' : `$${Number(input).toFixed(2)}`;
 
 function readMax(asset) {
   const max = asset.max_strategy || {};
   return {
     score: max.max_score,
-    phase: max.market_phase?.phase || max.market_phase || 'N/D',
+    phase: typeof max.market_phase === 'string' ? max.market_phase : (max.market_phase?.phase || max.market_phase?.state || 'N/D'),
     status: max.entry_plan?.status || 'N/D',
     mode: max.entry_plan?.execution_mode || 'N/D',
     trigger: max.entry_plan?.trigger_price,
@@ -89,7 +89,7 @@ export default function Stocks({ assets = [], selectedSector, setSelectedSector,
         return <button key={asset.ticker} onClick={() => onLoadFullStock(asset.ticker)} style={{ background: '#0f172a', color: 'white', border: `1px solid ${color}55`, borderRadius: 10, padding: compact ? 11 : 14, textAlign: 'left', cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}><div><strong>{asset.ticker}</strong><span style={{ color: '#64748b', fontSize: 10, marginLeft: 6 }}>{asset.sector_code}</span></div><div style={{ textAlign: 'right' }}><strong>{money(current)}</strong><div style={{ color: change >= 0 ? '#22c55e' : '#ef4444', fontSize: 10 }}>{change >= 0 ? '+' : ''}{Number(change).toFixed(2)}%</div></div></div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}><span style={{ color: getScoreColor(asset.setup_score), fontWeight: 800 }}>Setup {asset.setup_score ?? 'N/D'}</span>{getSetupBadge(asset.setup_type)}<span style={{ color: '#8b5cf6', fontWeight: 800 }}>Max {max.score ?? 'N/D'}</span></div>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}><span style={{ color, background: `${color}18`, borderRadius: 5, padding: '2px 6px', fontSize: 9, fontWeight: 800 }}>{max.status}</span><span style={{ color: '#94a3b8', background: '#1e293b', borderRadius: 5, padding: '2px 6px', fontSize: 9 }}>{max.phase}</span><span style={{ color: '#94a3b8', background: '#1e293b', borderRadius: 5, padding: '2px 6px', fontSize: 9 }}>{max.mode}</span></div>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}><span style={{ color, background: `${color}18`, borderRadius: 5, padding: '2px 6px', fontSize: 9, fontWeight: 800 }}>{max.status}</span><span style={{ color: '#94a3b8', background: '#1e293b', borderRadius: 5, padding: '2px 6px', fontSize: 9 }}>Fase titolo: {max.phase}</span><span style={{ color: '#94a3b8', background: '#1e293b', borderRadius: 5, padding: '2px 6px', fontSize: 9 }}>{max.mode}</span></div>
           {!compact && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, color: '#94a3b8', fontSize: 10, marginTop: 9 }}><div>Trigger <strong style={{ color: 'white' }}>{money(max.trigger)}</strong></div><div>Invalidazione <strong style={{ color: 'white' }}>{money(max.invalidation)}</strong></div><div>RSI <strong style={{ color: 'white' }}>{asset.rsi?.toFixed(0) ?? 'N/D'}</strong></div><div>Rel Vol <strong style={{ color: 'white' }}>{asset.relative_volume?.toFixed(1) ?? 'N/D'}x</strong></div></div>}
         </button>;
       })}
