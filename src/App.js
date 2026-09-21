@@ -83,7 +83,7 @@ function App() {
 
   const refreshData = async () => {
     setLoading(true);
-    const result = await api.fetchSectorsAndAssets(305);
+    const result = await api.fetchSectorsAndAssets(250);
     if (result) {
       setSectors(result.sectors);
       setAssets(result.assets);
