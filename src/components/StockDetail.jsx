@@ -43,7 +43,7 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
 
   const max = stock.max_strategy || {};
   const plan = max.entry_plan || {};
-  const phase = max.market_phase || {};
+  const phaseLabel = typeof max.market_phase === 'string' ? max.market_phase : (max.market_phase?.phase || max.market_phase?.state || 'N/D');
   const weekly = max.weekly_context || {};
   const daily = max.daily_confirmation || {};
   const execution = max.execution_4h || {};
@@ -92,7 +92,7 @@ export default function StockDetail({ stock, onBack, onBuy, livePrice, mlScore, 
       <Section title="Max Strategy v1.5.2" accent="#8b5cf6">
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
           <Pill color={planColor}>{plan.status || 'N/D'}</Pill>
-          <Pill color="#8b5cf6">{phase.phase || phase || 'N/D'}</Pill>
+          <Pill color="#8b5cf6">Fase titolo: {phaseLabel}</Pill>
           <Pill color="#06b6d4">{plan.execution_mode || 'N/D'}</Pill>
           <Pill color={max.strategy_eligible ? '#22c55e' : '#64748b'}>{max.strategy_eligible ? 'Strategy eligible' : 'Non eligible'}</Pill>
           <Pill color={max.trade_ready ? '#22c55e' : '#eab308'}>{max.trade_ready ? 'Trade ready' : 'In attesa'}</Pill>
