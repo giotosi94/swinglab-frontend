@@ -89,11 +89,11 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
     setLoadingExtra(false);
   }
 
-  useEffect(() => {
-    loadExtras();
-    const interval = setInterval(loadExtras, 60000);
-    return () => clearInterval(interval);
-  }, [agentsStatus]);
+ useEffect(() => {
+   loadExtras();
+   const interval = setInterval(loadExtras, 60000);
+   return () => clearInterval(interval);
+ }, []);
 
   const maxRows = useMemo(() => {
     const alpha = maxShadow?.candidates || [];
