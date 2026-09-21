@@ -1,110 +1,74 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-/**
- * 🎯 TradingView Advanced Chart Widget
- * 
- * Sostituisce i grafici custom con TradingView professionale.
- * - Zero costi Twelve Data (TradingView è gratis)
- * - Real-time updates
- * - Full drawing tools + indicators
- * - Look & feel Bloomberg-style
- * 
- * Props:
- *   ticker: string (es. "AAPL", "SNAP", "NVDA")
- *   height: number (default 500)
- *   theme: "dark" | "light" (default "dark")
- */
-export default function TradingViewChart({ 
-  ticker = 'SPY', 
-  height = 500,
-  theme = 'dark',
-}) {
-  const containerRef = useRef(null);
-  const scriptLoaded = useRef(false);
+function Widget({ ticker, height, theme }) {
+  const ref = useRef(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    
-    // Pulisci container precedente
-    containerRef.current.innerHTML = '';
-    
-    // Crea container per widget
-    const widgetContainer = document.createElement('div');
-    widgetContainer.style.height = `${height}px`;
-    widgetContainer.style.width = '100%';
-    containerRef.current.appendChild(widgetContainer);
-
-    // Rimuovi script vecchio se esiste
-    const oldScript = document.getElementById(`tv-script-${ticker}`);
-    if (oldScript) oldScript.remove();
-    
-    // Crea script TradingView
+    if (!ref.current) return undefined;
+    ref.current.innerHTML = '';
+    const host = document.createElement('div');
+    host.style.height = `${height}px`;
+    host.style.width = '100%';
+    ref.current.appendChild(host);
     const script = document.createElement('script');
-    script.id = `tv-script-${ticker}`;
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.type = 'text/javascript';
     script.async = true;
-    
-    // Config widget
-    const config = {
+    script.innerHTML = JSON.stringify({
       autosize: true,
       symbol: ticker,
-      interval: 'D',              // Default: Daily. User può cambiare
+      interval: 'D',
       timezone: 'Europe/Rome',
-      theme: theme,
-      style: '1',                  // Candles
+      theme,
+      style: '1',
       locale: 'it',
       toolbar_bg: '#0f172a',
       enable_publishing: false,
-      allow_symbol_change: true,   // User può cambiare ticker
+      allow_symbol_change: true,
       hide_side_toolbar: false,
-      studies: [
-        'MASimple@tv-basicstudies',
-        'MACD@tv-basicstudies',
-        'RSI@tv-basicstudies',
-      ],
-      support_host: 'https://www.tradingview.com',
-    };
-    
-    script.innerHTML = JSON.stringify(config);
-    widgetContainer.appendChild(script);
-    scriptLoaded.current = true;
-
+      studies: [{ id: 'MASimple@tv-basicstudies', inputs: { length: 200 } }],
+      support_host: 'https://www.tradingview.com'
+    });
+    host.appendChild(script);
     return () => {
-      // Cleanup
-      const script = document.getElementById(`tv-script-${ticker}`);
-      if (script) script.remove();
+      if (ref.current) ref.current.innerHTML = '';
     };
   }, [ticker, height, theme]);
 
-  return (
-    <div style={{
-      background: '#0f172a',
-      borderRadius: 12,
-      padding: 12,
-      border: '1px solid #1e293b',
-    }}>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: 10,
-      }}>
-        <h3 style={{ margin: 0, fontSize: 15, color: '#94a3b8' }}>
-          📊 {ticker} — Live Chart
-        </h3>
-        <span style={{
-          fontSize: 10,
-          padding: '3px 8px',
-          borderRadius: 4,
-          background: '#3b82f622',
-          color: '#3b82f6',
-          border: '1px solid #3b82f644',
-        }}>
-          Powered by TradingView
-        </span>
+  return <div ref={ref} style={{ minHeight: height, width: '100%' }} />;
+}
+
+export default function TradingViewChart({ ticker = 'SPY', height = 500, theme = 'dark' }) {
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!fullscreen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const close = (event) => {
+      if (event.key === 'Escape') setFullscreen(false);
+    };
+    window.addEventListener('keydown', close);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', close);
+    };
+  }, [fullscreen]);
+
+  const content = (full) => (
+    <div style={{ background: '#0f172a', borderRadius: full ? 0 : 12, padding: 12, border: full ? 'none' : '1px solid #1e293b', height: full ? '100vh' : 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div>
+          <div style={{ color: '#e2e8f0', fontWeight: 800 }}>{ticker} · TradingView</div>
+          <div style={{ color: '#64748b', fontSize: 10 }}>Daily · SMA 200</div>
+        </div>
+        <button onClick={() => setFullscreen(!full)} style={{ background: '#1e293b', color: 'white', border: '1px solid #334155', borderRadius: 7, padding: '7px 11px', cursor: 'pointer', fontWeight: 700 }}>
+          {full ? '✕ Chiudi' : '⛶ Schermo intero'}
+        </button>
       </div>
-      <div ref={containerRef} style={{ minHeight: height }} />
+      <Widget ticker={ticker} height={full ? Math.max(500, window.innerHeight - 72) : height} theme={theme} />
     </div>
   );
+
+  return <>{content(false)}{fullscreen && <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#020617' }}>{content(true)}</div>}</>;
 }
