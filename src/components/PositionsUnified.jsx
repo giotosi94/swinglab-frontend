@@ -5,16 +5,43 @@ import { fetchPositionsDetail } from '../utils/api';
 
 const TARGET_SIZES = { t1: 30, t2: 30, t3: 25 };
 
-export default function PositionsUnified({ alpacaData, assets = [] }) {
+function normalizeLivePrices(payload) {
+  const source = payload?.prices || payload?.live_prices || payload?.data || payload || {};
+  const map = {};
+
+  if (Array.isArray(source)) {
+    source.forEach((item) => {
+      const ticker = item?.ticker || item?.symbol;
+      if (ticker) map[ticker] = item;
+    });
+    return map;
+  }
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (value && typeof value === 'object') map[key] = value;
+  });
+
+  return map;
+}
+
+export default function PositionsUnified({
+  alpacaData,
+  assets = [],
+  livePrices = {},
+  onLoadFullStock,
+  setSelectedStock,
+  setView,
+}) {
   const [positionsDetail, setPositionsDetail] = useState({});
   const [adaptiveTargets, setAdaptiveTargets] = useState({});
   const [expanded, setExpanded] = useState({});
+  const [internalLivePrices, setInternalLivePrices] = useState({});
   const [updatedAt, setUpdatedAt] = useState(null);
 
   useEffect(() => {
     let active = true;
 
-    async function load() {
+    async function loadDetails() {
       try {
         const [detailData, targetsResponse] = await Promise.all([
           fetchPositionsDetail(),
@@ -45,11 +72,39 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
       }
     }
 
-    load();
+    loadDetails();
+
     return () => {
       active = false;
     };
   }, [alpacaData]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadLivePrices() {
+      try {
+        const response = await fetch(`${API}/api/data/live`);
+        if (!response.ok) return;
+
+        const payload = await response.json();
+        if (!active) return;
+
+        setInternalLivePrices(normalizeLivePrices(payload));
+        setUpdatedAt(new Date());
+      } catch (error) {
+        console.error('Live prices load failed', error);
+      }
+    }
+
+    loadLivePrices();
+    const timer = setInterval(loadLivePrices, 30000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const assetMap = useMemo(() => {
     const map = {};
@@ -59,10 +114,25 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
     return map;
   }, [assets]);
 
+  const mergedLivePrices = useMemo(
+    () => ({ ...internalLivePrices, ...livePrices }),
+    [internalLivePrices, livePrices],
+  );
+
   const positions = alpacaData?.positions || [];
 
   const toggleExpand = (ticker) => {
     setExpanded((previous) => ({ ...previous, [ticker]: !previous[ticker] }));
+  };
+
+  const openStock = (ticker) => {
+    if (onLoadFullStock) {
+      onLoadFullStock(ticker);
+      return;
+    }
+
+    if (setSelectedStock) setSelectedStock(ticker);
+    if (setView) setView('stock');
   };
 
   if (positions.length === 0) {
@@ -84,7 +154,7 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
           </div>
         </div>
         <div style={{ color: '#64748b', fontSize: 10 }}>
-          {updatedAt ? `Aggiornato ${updatedAt.toLocaleTimeString('it-IT')}` : 'Aggiornamento in corso'}
+          {updatedAt ? `Prezzi aggiornati ${updatedAt.toLocaleTimeString('it-IT')}` : 'Aggiornamento in corso'}
         </div>
       </div>
 
@@ -94,24 +164,46 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
           const detail = positionsDetail[ticker] || {};
           const adaptive = adaptiveTargets[ticker];
           const asset = assetMap[ticker] || {};
+          const live = mergedLivePrices[ticker] || {};
           const isExpanded = Boolean(expanded[ticker]);
           const pnlPct = Number(position.pnl_pct ?? detail.pnl_pct ?? 0);
           const pnl = Number(position.pnl ?? detail.pnl ?? 0);
-          const currentPrice = Number(position.current_price ?? detail.current_price ?? 0);
-          const entryPrice = Number(position.entry_price ?? detail.entry_price ?? 0);
+          const currentPrice = Number(live.price ?? live.current_price ?? position.current_price ?? detail.current_price ?? asset.price ?? 0);
+          const entryPrice = Number(position.entry_price ?? position.avg_entry_price ?? detail.entry_price ?? 0);
           const quantity = Number(position.qty ?? detail.qty ?? 0);
+          const marketValue = Number(position.market_value ?? currentPrice * quantity ?? 0);
           const stop = Number(detail.stop_loss || 0);
           const target = Number(detail.target || 0);
           const lastTarget = Number(adaptive?.last_target_hit ?? detail.last_target_hit ?? 0);
           const protectedPosition = stop > 0;
           const setupType = detail.setup_type || asset.setup_type;
+          const canOpenStock = Boolean(onLoadFullStock || setSelectedStock || setView);
 
           return (
             <div key={ticker} style={{ background: '#111827', border: `1px solid ${protectedPosition ? '#1e293b' : '#ef444466'}`, borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 16, fontWeight: 800 }}>{ticker}</span>
+                    <button
+                      type="button"
+                      onClick={() => openStock(ticker)}
+                      disabled={!canOpenStock}
+                      title={canOpenStock ? `Apri analisi completa ${ticker}` : ticker}
+                      style={{
+                        border: 0,
+                        background: 'transparent',
+                        padding: 0,
+                        color: '#f8fafc',
+                        fontSize: 16,
+                        fontWeight: 800,
+                        cursor: canOpenStock ? 'pointer' : 'default',
+                        textDecoration: canOpenStock ? 'underline' : 'none',
+                        textDecorationColor: '#334155',
+                        textUnderlineOffset: 4,
+                      }}
+                    >
+                      {ticker}
+                    </button>
                     {setupType && getSetupBadge(setupType)}
                     <span style={{ color: protectedPosition ? '#22c55e' : '#ef4444', fontSize: 10, fontWeight: 700 }}>
                       {protectedPosition ? 'PROTETTA' : 'STOP MANCANTE'}
@@ -123,8 +215,30 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
                     )}
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ textAlign: 'right' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => openStock(ticker)}
+                      disabled={!canOpenStock}
+                      style={{
+                        minWidth: 94,
+                        textAlign: 'right',
+                        border: 0,
+                        background: 'transparent',
+                        padding: 0,
+                        cursor: canOpenStock ? 'pointer' : 'default',
+                      }}
+                    >
+                      <div style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase', letterSpacing: '.04em' }}>Prezzo attuale</div>
+                      <div style={{ color: '#f8fafc', fontWeight: 800, fontSize: 16, marginTop: 2 }}>
+                        {currentPrice > 0 ? `$${currentPrice.toFixed(2)}` : 'N/D'}
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: 9, marginTop: 2 }}>
+                        Entry {entryPrice > 0 ? `$${entryPrice.toFixed(2)}` : 'N/D'}
+                      </div>
+                    </button>
+
+                    <div style={{ textAlign: 'right', minWidth: 80 }}>
                       <div style={{ color: pnlPct >= 0 ? '#22c55e' : '#ef4444', fontWeight: 800, fontSize: 16 }}>
                         {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
                       </div>
@@ -132,7 +246,22 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
                         {pnl >= 0 ? '+' : '-'}${Math.abs(pnl).toFixed(2)}
                       </div>
                     </div>
-                    <button onClick={() => toggleExpand(ticker)} style={{ padding: '5px 10px', borderRadius: 6, background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', cursor: 'pointer', fontSize: 11 }}>
+
+                    {canOpenStock && (
+                      <button
+                        type="button"
+                        onClick={() => openStock(ticker)}
+                        style={{ padding: '5px 10px', borderRadius: 6, background: '#172554', color: '#93c5fd', border: '1px solid #1d4ed8', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                      >
+                        Apri stock
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(ticker)}
+                      style={{ padding: '5px 10px', borderRadius: 6, background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', cursor: 'pointer', fontSize: 11 }}
+                    >
                       {isExpanded ? 'Nascondi' : 'Dettagli'}
                     </button>
                   </div>
@@ -143,6 +272,7 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
                     {['t1', 't2', 't3'].map((key) => {
                       const item = adaptive.targets[key] || {};
                       const size = Number(item.size_pct ?? TARGET_SIZES[key]);
+
                       return (
                         <div key={key} style={{ background: item.reached ? '#22c55e22' : '#0f172a', border: `1px solid ${item.reached ? '#22c55e55' : '#1e293b'}`, borderRadius: 7, padding: '6px 8px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
@@ -163,7 +293,8 @@ export default function PositionsUnified({ alpacaData, assets = [] }) {
                     {[
                       ['Quantità', quantity.toFixed(4)],
                       ['Entry', `$${entryPrice.toFixed(2)}`],
-                      ['Prezzo', `$${currentPrice.toFixed(2)}`],
+                      ['Prezzo attuale', currentPrice > 0 ? `$${currentPrice.toFixed(2)}` : 'N/D'],
+                      ['Valore posizione', marketValue > 0 ? `$${marketValue.toFixed(2)}` : 'N/D'],
                       ['Stop effettivo', stop > 0 ? `$${stop.toFixed(2)}` : 'Assente'],
                       ['Target finale', target > 0 ? `$${target.toFixed(2)}` : 'N/D'],
                       ['R/R residuo', Number(detail.risk_reward || 0).toFixed(2)],
