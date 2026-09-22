@@ -278,7 +278,8 @@ function App() {
           <Alpaca
             alpacaData={alpacaData} equityPeriods={equityPeriods}
             selectedPeriod={selectedPeriod} setSelectedPeriod={setSelectedPeriod}
-            assets={assets}
+            assets={assets} livePrices={livePrices}
+            onLoadFullStock={(ticker) => { loadFullStock(ticker); setView('stocks'); }}
           />
         ) : view === 'trades' ? (
           <Trades />
