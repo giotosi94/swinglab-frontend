@@ -1,541 +1,1010 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  AreaChart,
-  Area,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { API_URL } from '../utils/constants';
-import { getScoreColor } from '../utils/helpers';
+import httpx
+import asyncio
+from app.config import settings
+from app.db.mongodb import get_db
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
-const COLORS = {
-  XLK: '#3b82f6',
-  XLF: '#f59e0b',
-  XLV: '#22c55e',
-  XLI: '#a855f7',
-  XLY: '#ec4899',
-  XLP: '#94a3b8',
-  XLE: '#f97316',
-  XLU: '#14b8a6',
-  XLB: '#eab308',
-  XLRE: '#8b5cf6',
-  XLC: '#ef4444',
-};
 
-const PERIODS = [
-  { label: '1M', days: 21 },
-  { label: '3M', days: 63 },
-  { label: '6M', days: 126 },
-  { label: '1Y', days: 252 },
-  { label: '3Y', days: 750 },
-];
+ALPACA_BASE = "https://paper-api.alpaca.markets" if settings.ALPACA_PAPER else "https://api.alpaca.markets"
+ALPACA_DATA = "https://data.alpaca.markets"
 
-const smallButtonStyle = {
-  background: '#1e293b',
-  color: '#cbd5e1',
-  border: '1px solid #334155',
-  borderRadius: 7,
-  padding: '5px 8px',
-  fontSize: 10,
-  fontWeight: 700,
-  cursor: 'pointer',
-};
 
-export default function Sectors({ sectors, setSelectedSector, setView }) {
-  const [period, setPeriod] = useState(63);
-  const [relativeData, setRelativeData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [selectedCodes, setSelectedCodes] = useState([]);
-  const [focusCode, setFocusCode] = useState(null);
-  const [showToday, setShowToday] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadRelativeStrength = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const response = await fetch(
-          `${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true`,
-        );
-        const data = await response.json();
-
-        if (!response.ok || data.error) {
-          throw new Error(data.error || 'Errore caricamento forza relativa');
-        }
-
-        if (!active) return;
-
-        setRelativeData(data);
-
-        const available = (data.series || []).map((item) => item.code);
-        setSelectedCodes((current) => {
-          const preserved = current.filter((code) => available.includes(code));
-          return preserved.length ? preserved : available;
-        });
-        setFocusCode((current) => current || data.ranking?.[0]?.code || null);
-      } catch (loadError) {
-        if (active) setError(loadError.message);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    loadRelativeStrength();
-
-    // Durante la seduta il punto proiettato cambia: rinfresca ogni 2 minuti.
-    const timer = setInterval(loadRelativeStrength, 120000);
-
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [period]);
-
-  const projectionOn = Boolean(relativeData?.projection_available) && showToday;
-  const spyToday = relativeData?.spy_intraday_move_pct;
-
-  // Il punto di oggi viene disegnato su una serie separata, in tratteggio,
-  // collegata all'ultima chiusura. Cosi' resta chiaro che e' provvisorio
-  // e non si confonde con lo storico consolidato.
-  const chartData = useMemo(() => {
-    const rows = {};
-
-    for (const sector of relativeData?.series || []) {
-      const points = sector.points || [];
-
-      points.forEach((point, index) => {
-        if (!rows[point.date]) rows[point.date] = { date: point.date };
-
-        if (point.projected) {
-          if (!projectionOn) return;
-          rows[point.date][`${sector.code}__today`] = point.value;
-          rows[point.date][`${sector.code}__isToday`] = true;
-        } else {
-          rows[point.date][sector.code] = point.value;
-
-          // L'ultima chiusura appartiene a entrambe le serie: serve come
-          // punto di aggancio del tratteggio.
-          const isLastClose = index === points.length - 1
-            || (points[index + 1] && points[index + 1].projected);
-
-          if (isLastClose && projectionOn) {
-            rows[point.date][`${sector.code}__today`] = point.value;
-          }
-        }
-      });
-    }
-
-    return Object.values(rows).sort((a, b) => a.date.localeCompare(b.date));
-  }, [relativeData, projectionOn]);
-
-  const visibleSeries = useMemo(
-    () => (relativeData?.series || []).filter((item) => selectedCodes.includes(item.code)),
-    [relativeData, selectedCodes],
-  );
-
-  const ranking = relativeData?.ranking || [];
-  const focusedStocks = relativeData?.best_stocks?.[focusCode] || [];
-  const projectedLeaders = relativeData?.projected_leaders || [];
-
-  const toggleCode = (code) => {
-    setSelectedCodes((current) => (
-      current.includes(code)
-        ? current.filter((item) => item !== code)
-        : [...current, code]
-    ));
-    setFocusCode(code);
-  };
-
-  const showTopThree = () => {
-    const top = ranking.slice(0, 3).map((item) => item.code);
-    setSelectedCodes(top);
-    setFocusCode(top[0] || null);
-  };
-
-  const showBottomThree = () => {
-    const bottom = ranking.slice(-3).map((item) => item.code);
-    setSelectedCodes(bottom);
-    setFocusCode(bottom[0] || null);
-  };
-
-  const renderTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-
-    const isToday = label === relativeData?.today;
-
-    const rows = payload
-      .filter((entry) => entry.value != null)
-      .map((entry) => ({
-        name: entry.name.replace('__today', ''),
-        value: entry.value,
-        color: entry.color,
-      }));
-
-    const unique = [];
-    const seen = new Set();
-    for (const row of rows) {
-      if (seen.has(row.name)) continue;
-      seen.add(row.name);
-      unique.push(row);
-    }
-
-    return (
-      <div style={{ background: '#111827', border: '1px solid #334155', borderRadius: 8, padding: 10, fontSize: 11 }}>
-        <div style={{ color: isToday ? '#fbbf24' : '#cbd5e1', fontWeight: 700, marginBottom: 6 }}>
-          {label}{isToday ? ' · in corso' : ''}
-        </div>
-        {unique.map((row) => (
-          <div key={row.name} style={{ color: row.color, display: 'flex', justifyContent: 'space-between', gap: 14 }}>
-            <span>{row.name}</span>
-            <span>{Number(row.value).toFixed(2)}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  return (
-    <div>
-      <h3 style={{ marginBottom: 14 }}>Sector Intelligence</h3>
-
-      <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-          <div>
-            <div style={{ color: '#f8fafc', fontWeight: 800, fontSize: 16 }}>Forza relativa settori vs SPY</div>
-            <div style={{ color: '#64748b', fontSize: 11, marginTop: 3 }}>
-              Rapporto ETF/SPY indicizzato a 100. Sopra 100 significa sovraperformance nel periodo selezionato.
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {PERIODS.map((item) => (
-              <button
-                key={item.days}
-                onClick={() => setPeriod(item.days)}
-                style={{
-                  background: period === item.days ? '#2563eb' : '#1e293b',
-                  color: period === item.days ? '#fff' : '#94a3b8',
-                  border: '1px solid #334155',
-                  borderRadius: 7,
-                  padding: '6px 10px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {relativeData?.market_open && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap',
-              padding: '9px 12px',
-              borderRadius: 9,
-              background: 'rgba(251,191,36,.07)',
-              border: '1px solid rgba(251,191,36,.25)',
-              marginBottom: 12,
-            }}
-          >
-            <div style={{ fontSize: 11, color: '#fcd34d' }}>
-              <b>Seduta in corso</b>
-              {spyToday != null && (
-                <span style={{ color: '#fde68a' }}>
-                  {' '}· SPY {spyToday >= 0 ? '+' : ''}{Number(spyToday).toFixed(2)}%
-                </span>
-              )}
-              {projectedLeaders.length > 0 && (
-                <span style={{ color: '#fde68a' }}> · oggi guidano {projectedLeaders.join(', ')}</span>
-              )}
-              <div style={{ color: '#a16207', fontSize: 10, marginTop: 3 }}>
-                Il punto tratteggiato e' provvisorio: cambia fino alla chiusura.
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowToday(!showToday)}
-              style={{
-                ...smallButtonStyle,
-                background: showToday ? '#78350f' : '#1e293b',
-                color: showToday ? '#fcd34d' : '#94a3b8',
-                border: `1px solid ${showToday ? '#b45309' : '#334155'}`,
-              }}
-            >
-              {showToday ? 'Nascondi oggi' : 'Mostra oggi'}
-            </button>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
-          <button onClick={() => setSelectedCodes((relativeData?.series || []).map((item) => item.code))} style={smallButtonStyle}>Tutti</button>
-          <button onClick={() => setSelectedCodes([])} style={smallButtonStyle}>Nessuno</button>
-          <button onClick={showTopThree} style={smallButtonStyle}>Top 3</button>
-          <button onClick={showBottomThree} style={smallButtonStyle}>Bottom 3</button>
-
-          {ranking.map((item) => {
-            const selected = selectedCodes.includes(item.code);
-            const move = item.intraday_move_pct;
-
-            return (
-              <button
-                key={item.code}
-                onClick={() => toggleCode(item.code)}
-                style={{
-                  background: selected ? `${COLORS[item.code]}22` : '#111827',
-                  color: selected ? COLORS[item.code] : '#64748b',
-                  border: `1px solid ${selected ? COLORS[item.code] : '#1e293b'}`,
-                  borderRadius: 7,
-                  padding: '5px 8px',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                }}
-              >
-                {item.code} {item.relative_return_pct >= 0 ? '+' : ''}{item.relative_return_pct.toFixed(1)}%
-                {projectionOn && move != null && (
-                  <span style={{ color: move >= 0 ? '#34d399' : '#f87171', marginLeft: 5, fontSize: 9 }}>
-                    oggi {move >= 0 ? '+' : ''}{move.toFixed(1)}%
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {loading && <div style={{ color: '#94a3b8', fontSize: 12, padding: 20 }}>Caricamento grafico...</div>}
-        {error && <div style={{ color: '#f87171', fontSize: 12, padding: 20 }}>{error}</div>}
-
-        {!loading && !error && chartData.length > 1 && (
-          <ResponsiveContainer width="100%" height={360}>
-            <LineChart data={chartData} margin={{ top: 10, right: 22, left: 0, bottom: 5 }}>
-              <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 9 }} interval="preserveStartEnd" />
-              <YAxis tick={{ fill: '#64748b', fontSize: 9 }} domain={['auto', 'auto']} tickFormatter={(value) => value.toFixed(0)} />
-              <Tooltip content={renderTooltip} />
-              <ReferenceLine y={100} stroke="#94a3b8" strokeDasharray="5 5" />
-
-              {projectionOn && relativeData?.last_close_date && (
-                <ReferenceLine
-                  x={relativeData.last_close_date}
-                  stroke="#fbbf24"
-                  strokeDasharray="2 4"
-                  strokeOpacity={0.5}
-                />
-              )}
-
-              {visibleSeries.map((item) => (
-                <Line
-                  key={item.code}
-                  type="monotone"
-                  dataKey={item.code}
-                  name={item.code}
-                  stroke={COLORS[item.code]}
-                  strokeWidth={focusCode === item.code ? 3 : 1.7}
-                  dot={false}
-                  connectNulls
-                  onClick={() => setFocusCode(item.code)}
-                />
-              ))}
-
-              {projectionOn && visibleSeries.map((item) => (
-                <Line
-                  key={`${item.code}__today`}
-                  type="linear"
-                  dataKey={`${item.code}__today`}
-                  name={item.code}
-                  stroke={COLORS[item.code]}
-                  strokeWidth={focusCode === item.code ? 2.6 : 1.5}
-                  strokeDasharray="4 3"
-                  dot={{ r: 3, fill: '#0f172a', stroke: COLORS[item.code], strokeWidth: 2 }}
-                  connectNulls
-                  legendType="none"
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-
-        <div style={{ color: '#64748b', fontSize: 10, marginTop: 8 }}>
-          Barre chiuse: {relativeData?.executed_days || 0} sedute, dal {relativeData?.start_date || 'N/D'} al {relativeData?.last_close_date || 'N/D'}.
-          {projectionOn && <span style={{ color: '#fbbf24' }}> Tratteggio: seduta del {relativeData?.today} ancora aperta.</span>}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(280px, 0.8fr)', gap: 14, marginBottom: 18 }}>
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, overflow: 'hidden' }}>
-          <div style={{ padding: 12, color: '#f8fafc', fontWeight: 800 }}>
-            Ranking settori
-            <span style={{ color: '#64748b', fontSize: 10, fontWeight: 400, marginLeft: 8 }}>
-              su barre chiuse
-            </span>
-          </div>
-
-          {ranking.map((item) => (
-            <div
-              key={item.code}
-              onClick={() => {
-                setFocusCode(item.code);
-                if (!selectedCodes.includes(item.code)) setSelectedCodes((current) => [...current, item.code]);
-              }}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '32px 58px 1fr 84px 76px 72px',
-                gap: 8,
-                alignItems: 'center',
-                padding: '9px 12px',
-                borderTop: '1px solid #1e293b',
-                background: focusCode === item.code ? '#172554' : 'transparent',
-                cursor: 'pointer',
-                fontSize: 11,
-              }}
-            >
-              <span style={{ color: '#64748b' }}>#{item.rank}</span>
-              <span style={{ color: COLORS[item.code], fontWeight: 800 }}>{item.code}</span>
-              <span style={{ color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
-
-              <span style={{ color: item.relative_return_pct >= 0 ? '#34d399' : '#f87171', fontWeight: 700 }}>
-                {item.relative_return_pct >= 0 ? '+' : ''}{item.relative_return_pct.toFixed(2)}%
-              </span>
-
-              <span style={{ color: item.acceleration_20d >= 0 ? '#34d399' : '#f87171', fontSize: 10 }}>
-                Acc {item.acceleration_20d >= 0 ? '+' : ''}{item.acceleration_20d.toFixed(2)}
-              </span>
-
-              <span style={{ fontSize: 10, color: '#64748b' }}>
-                {projectionOn && item.intraday_move_pct != null ? (
-                  <span style={{ color: item.intraday_move_pct >= 0 ? '#fbbf24' : '#f87171' }}>
-                    oggi {item.intraday_move_pct >= 0 ? '+' : ''}{item.intraday_move_pct.toFixed(1)}%
-                  </span>
-                ) : '—'}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, overflow: 'hidden' }}>
-          <div style={{ padding: 12, color: '#f8fafc', fontWeight: 800 }}>Best stock in {focusCode || 'settore'}</div>
-
-          {focusedStocks.length === 0 && <div style={{ padding: 14, color: '#64748b', fontSize: 11 }}>Nessun asset disponibile.</div>}
-
-          {focusedStocks.map((stock) => {
-            const approved = stock.status === 'CANDIDATE' && stock.alpha_confluence >= stock.threshold;
-            const missingSnapshot = stock.status === 'NO_ALPHA_SNAPSHOT';
-
-            return (
-              <div key={stock.ticker} style={{ padding: '10px 12px', borderTop: '1px solid #1e293b' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                  <span style={{ color: '#f8fafc', fontWeight: 800 }}>{stock.ticker}</span>
-                  <span
-                    style={{
-                      color: approved ? '#34d399' : missingSnapshot ? '#94a3b8' : '#fbbf24',
-                      background: approved ? '#052e16' : missingSnapshot ? '#1e293b' : '#451a03',
-                      borderRadius: 6,
-                      padding: '3px 7px',
-                      fontSize: 9,
-                      fontWeight: 800,
-                    }}
-                  >
-                    {approved ? 'CANDIDATO' : missingSnapshot ? 'ATTESA SCAN' : 'SOTTO SOGLIA'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 7 }}>
-                  <div style={{ color: '#64748b', fontSize: 9 }}>
-                    Setup
-                    <div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.score || 0).toFixed(1)}</div>
-                  </div>
-                  <div style={{ color: '#64748b', fontSize: 9 }}>
-                    Pre-settore
-                    <div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.confluence_before_sector || 0).toFixed(1)}</div>
-                  </div>
-                  <div style={{ color: '#64748b', fontSize: 9 }}>
-                    Finale
-                    <div style={{ color: approved ? '#34d399' : '#fbbf24', fontWeight: 800 }}>{Number(stock.alpha_confluence || 0).toFixed(1)}</div>
-                  </div>
-                </div>
-
-                <div style={{ color: stock.sector_adjustment >= 0 ? '#34d399' : '#f87171', fontSize: 10, marginTop: 5 }}>
-                  Settore #{stock.sector_rank || '-'} | Adj {stock.sector_adjustment >= 0 ? '+' : ''}{Number(stock.sector_adjustment || 0).toFixed(1)} | {stock.sector_reason}
-                </div>
-
-                <div style={{ color: '#94a3b8', fontSize: 10, marginTop: 3 }}>
-                  {stock.setup_type} | RSI {stock.rsi} | Weekly {stock.weekly_trend} | R/R {Number(stock.risk_reward || 0).toFixed(2)}{stock.poc_shift ? ' | POC Shift' : ''}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-        {[...sectors]
-          .sort((a, b) => b.composite_score - a.composite_score)
-          .map((sector) => (
-            <div
-              key={sector.code}
-              onClick={() => {
-                setSelectedSector(sector.code);
-                setView('stocks');
-              }}
-              style={{ background: '#0f172a', borderRadius: 10, padding: 14, cursor: 'pointer', border: '1px solid #1e293b' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontWeight: 700 }}>{sector.code}</span>
-                <span style={{ color: getScoreColor(sector.composite_score), fontWeight: 700 }}>{sector.composite_score?.toFixed(1)}</span>
-              </div>
-
-              <div style={{ color: '#64748b', fontSize: 12 }}>{sector.name}</div>
-
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                ${sector.price} | RSI {sector.rsi} | Str {sector.strength_score >= 0 ? '+' : ''}{sector.strength_score?.toFixed(1)}
-              </div>
-
-              <div style={{ fontSize: 9, color: '#475569', marginTop: 4 }}>
-                {sector.updated_at
-                  ? new Date(sector.updated_at.endsWith('Z') ? sector.updated_at : `${sector.updated_at}Z`).toLocaleString('it-IT', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'Europe/Rome',
-                  })
-                  : 'N/D'}
-              </div>
-
-              {sector.history && (
-                <ResponsiveContainer width="100%" height={40}>
-                  <AreaChart data={sector.history.slice(-30)}>
-                    <Area
-                      type="monotone"
-                      dataKey="close"
-                      stroke={sector.composite_score >= 50 ? '#22c55e' : '#ef4444'}
-                      fill={sector.composite_score >= 50 ? '#22c55e' : '#ef4444'}
-                      fillOpacity={0.1}
-                      strokeWidth={1.5}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          ))}
-      </div>
-    </div>
-  );
+HEADERS = {
+    "APCA-API-KEY-ID": settings.ALPACA_API_KEY,
+    "APCA-API-SECRET-KEY": settings.ALPACA_SECRET_KEY,
 }
+
+
+async def alpaca_request(method, url, json=None):
+    async with httpx.AsyncClient(timeout=30) as client:
+        if method == "GET":
+            r = await client.get(url, headers=HEADERS)
+        elif method == "POST":
+            r = await client.post(url, headers=HEADERS, json=json)
+        elif method == "DELETE":
+            r = await client.delete(url, headers=HEADERS)
+        else:
+            return None
+        if r.status_code in (200, 201, 204):
+            return r.json() if r.text else {}
+        else:
+            print("Alpaca error {}: {}".format(r.status_code, r.text[:200]))
+            return None
+
+
+# ============================================
+# ACCOUNT & POSITIONS
+# ============================================
+
+async def get_account():
+    return await alpaca_request("GET", "{}/v2/account".format(ALPACA_BASE))
+
+
+async def get_positions():
+    return await alpaca_request("GET", "{}/v2/positions".format(ALPACA_BASE))
+
+
+async def get_orders(status="all", limit=50, nested=True):
+    url = "{}/v2/orders?status={}&limit={}&direction=desc&nested={}".format(
+        ALPACA_BASE, status, limit, str(nested).lower()
+    )
+    return await alpaca_request("GET", url)
+
+
+# ============================================
+# 🆕 ASSET INFO (per check fractionable)
+# ============================================
+
+async def get_asset_info(symbol: str):
+    """
+    🆕 Ritorna info su un asset Alpaca, incluso il flag fractionable.
+    Usato dal RiskManager per filtrare titoli non frazionabili.
+    """
+    return await alpaca_request("GET", "{}/v2/assets/{}".format(ALPACA_BASE, symbol))
+
+
+async def is_fractionable(symbol: str) -> bool:
+    """🆕 Check rapido se un titolo supporta fractional shares."""
+    info = await get_asset_info(symbol)
+    if info:
+        return bool(info.get("fractionable", False))
+    return False
+
+
+# ============================================
+# ORDERS — Place (modificato per supportare qty float)
+# ============================================
+
+async def place_order(symbol, qty, side, order_type="market", time_in_force="day", limit_price=None, stop_price=None):
+    """
+    🔧 Modificato: qty può essere float (per fractional).
+    """
+    order = {
+        "symbol": symbol,
+        "qty": str(qty),  # Alpaca accetta stringhe sia per int che per float
+        "side": side,
+        "type": order_type,
+        "time_in_force": time_in_force,
+    }
+    if limit_price:
+        order["limit_price"] = str(limit_price)
+    if stop_price:
+        order["stop_price"] = str(stop_price)
+    result = await alpaca_request("POST", "{}/v2/orders".format(ALPACA_BASE), json=order)
+    if result:
+        db = get_db()
+        await db.alpaca_orders.insert_one({
+            "order_id": result.get("id"),
+            "symbol": symbol,
+            "qty": float(qty),  # 🔧 salvato come float
+            "side": side,
+            "type": order_type,
+            "status": result.get("status"),
+            "created_at": datetime.utcnow(),
+            "raw": result,
+        })
+    return result
+
+
+# ============================================
+# 🆕 NOTIONAL BUY (acquisto in dollari, supporta fractional)
+# ============================================
+
+async def place_notional_buy(symbol: str, notional_usd: float, time_in_force: str = "day"):
+    """
+    🆕 Piazza un BUY market notional (in dollari) — supporta fractional shares.
+    
+    Esempio: place_notional_buy("LIN", 2000) compra $2.000 di LIN
+    (potrebbe risultare in 3.809 shares se LIN vale $525).
+    
+    NOTA: Alpaca permette notional SOLO con:
+    - type=market
+    - time_in_force=day
+    - NO order_class (no bracket diretto)
+    """
+    order = {
+        "symbol": symbol,
+        "notional": str(round(notional_usd, 2)),
+        "side": "buy",
+        "type": "market",
+        "time_in_force": time_in_force,
+    }
+    
+    result = await alpaca_request("POST", "{}/v2/orders".format(ALPACA_BASE), json=order)
+    
+    if result:
+        db = get_db()
+        await db.alpaca_orders.insert_one({
+            "order_id": result.get("id"),
+            "symbol": symbol,
+            "notional": float(notional_usd),
+            "side": "buy",
+            "type": "market_notional",
+            "status": result.get("status"),
+            "created_at": datetime.utcnow(),
+            "raw": result,
+        })
+        print(f"  💵 NOTIONAL BUY {symbol}: ${notional_usd:.2f} (id={result.get('id', '')[:8]})")
+    else:
+        print(f"  ❌ NOTIONAL BUY {symbol} FAILED: ${notional_usd:.2f}")
+    
+    return result
+
+
+# ============================================
+# 🆕 WAIT FOR FILL (polling)
+# ============================================
+
+async def wait_for_fill(order_id: str, timeout_sec: int = 15, poll_interval: float = 1.0):
+    """
+    🆕 Polla un ordine fino a fill (o timeout).
+    
+    Ritorna dict con:
+    - filled: bool
+    - filled_qty: float (quantità effettivamente acquistata, frazionaria)
+    - filled_avg_price: float (prezzo medio di esecuzione)
+    - status: str
+    - order: dict completo
+    
+    Necessario dopo place_notional_buy per ottenere la qty reale
+    e poi piazzare SL/TP con quella quantità.
+    """
+    url = "{}/v2/orders/{}".format(ALPACA_BASE, order_id)
+    elapsed = 0
+    
+    while elapsed < timeout_sec:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url, headers=HEADERS)
+                if r.status_code == 200:
+                    order = r.json()
+                    status = order.get("status", "")
+                    filled_qty = float(order.get("filled_qty", 0) or 0)
+                    
+                    if status == "filled" and filled_qty > 0:
+                        return {
+                            "filled": True,
+                            "filled_qty": filled_qty,
+                            "filled_avg_price": float(order.get("filled_avg_price", 0) or 0),
+                            "status": status,
+                            "order": order,
+                        }
+                    elif status in ("canceled", "rejected", "expired"):
+                        return {
+                            "filled": False,
+                            "filled_qty": 0,
+                            "filled_avg_price": 0,
+                            "status": status,
+                            "order": order,
+                        }
+        except Exception as e:
+            print(f"  ⚠️  wait_for_fill poll error: {e}")
+        
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+    
+    # Timeout — leggi ultimo stato
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=HEADERS)
+            if r.status_code == 200:
+                order = r.json()
+                filled_qty = float(order.get("filled_qty", 0) or 0)
+                return {
+                    "filled": filled_qty > 0,
+                    "filled_qty": filled_qty,
+                    "filled_avg_price": float(order.get("filled_avg_price", 0) or 0),
+                    "status": order.get("status", "timeout"),
+                    "order": order,
+                }
+    except Exception:
+        pass
+    
+    return {"filled": False, "filled_qty": 0, "filled_avg_price": 0, "status": "timeout", "order": None}
+
+
+# ============================================
+# 🆕 PLACE BRACKETS AFTER FILL (SL + TP separati, qty frazionaria)
+# ============================================
+
+async def place_brackets_after_fill(symbol: str, qty: float, take_profit: float, stop_loss: float,
+                                     time_in_force: str = "gtc"):
+    """
+    🆕 Dopo un buy notional con fill, piazza SL e TP separati con qty frazionaria.
+    
+    Alpaca NON permette bracket+notional, quindi facciamo:
+    1. STOP LOSS sell order (type=stop)
+    2. TAKE PROFIT sell order (type=limit)
+    
+    NOTA: non sono linkati come OCO (Alpaca non supporta OCO con fractional).
+    L'Executor / RiskManager si occupa di cancellare l'altro quando uno triggera.
+    
+    Ritorna dict con i 2 ordini piazzati.
+    """
+    result = {"stop_loss_order": None, "take_profit_order": None, "errors": []}
+    
+    qty_str = str(round(qty, 4))  # max 4 decimali per Alpaca
+    
+    # 1. STOP LOSS
+    try:
+        sl_payload = {
+            "symbol": symbol,
+            "qty": qty_str,
+            "side": "sell",
+            "type": "stop",
+            "time_in_force": time_in_force,
+            "stop_price": str(round(stop_loss, 2)),
+        }
+        sl_result = await alpaca_request("POST", "{}/v2/orders".format(ALPACA_BASE), json=sl_payload)
+        if sl_result:
+            result["stop_loss_order"] = sl_result
+            print(f"    🛡️  SL placed {symbol}: qty={qty_str} @ ${stop_loss:.2f}")
+        else:
+            result["errors"].append("SL order failed")
+    except Exception as e:
+        result["errors"].append(f"SL: {str(e)}")
+        print(f"    ❌ SL error {symbol}: {e}")
+    
+    # 2. TAKE PROFIT
+    try:
+        tp_payload = {
+            "symbol": symbol,
+            "qty": qty_str,
+            "side": "sell",
+            "type": "limit",
+            "time_in_force": time_in_force,
+            "limit_price": str(round(take_profit, 2)),
+        }
+        tp_result = await alpaca_request("POST", "{}/v2/orders".format(ALPACA_BASE), json=tp_payload)
+        if tp_result:
+            result["take_profit_order"] = tp_result
+            print(f"    🎯 TP placed {symbol}: qty={qty_str} @ ${take_profit:.2f}")
+        else:
+            result["errors"].append("TP order failed")
+    except Exception as e:
+        result["errors"].append(f"TP: {str(e)}")
+        print(f"    ❌ TP error {symbol}: {e}")
+    
+    return result
+
+
+# ============================================
+# OCO Order (legacy — mantenuto per retrocompat, ma NON usato col fractional)
+# ============================================
+
+async def place_oco_order(
+    symbol: str,
+    qty: int,
+    take_profit_price: float,
+    stop_loss_price: float,
+    time_in_force: str = "gtc",
+):
+    """
+    🎯 Piazza un ordine OCO (One-Cancels-Other) di vendita.
+    LEGACY: usato solo per shares intere. Non compatibile con fractional.
+    """
+    payload = {
+        "symbol": symbol,
+        "qty": str(qty),
+        "side": "sell",
+        "type": "limit",
+        "time_in_force": time_in_force,
+        "limit_price": str(round(take_profit_price, 2)),
+        "order_class": "oco",
+        "stop_loss": {
+            "stop_price": str(round(stop_loss_price, 2))
+        },
+        "take_profit": {
+            "limit_price": str(round(take_profit_price, 2))
+        }
+    }
+    result = await alpaca_request("POST", "{}/v2/orders".format(ALPACA_BASE), json=payload)
+    if result:
+        print(f"✅ OCO {symbol}: TP={take_profit_price:.2f} SL={stop_loss_price:.2f} id={result.get('id', '')[:8]}")
+        db = get_db()
+        await db.alpaca_orders.insert_one({
+            "order_id": result.get("id"),
+            "symbol": symbol,
+            "qty": qty,
+            "side": "sell",
+            "type": "oco",
+            "status": result.get("status"),
+            "take_profit_price": round(take_profit_price, 2),
+            "stop_loss_price": round(stop_loss_price, 2),
+            "created_at": datetime.utcnow(),
+            "raw": result,
+        })
+    else:
+        print(f"❌ OCO {symbol} FAILED: TP={take_profit_price:.2f} SL={stop_loss_price:.2f}")
+    return result
+
+
+# ============================================
+# Bracket Order (legacy — solo shares intere)
+# ============================================
+
+async def place_bracket_order(symbol, qty, limit_price, take_profit, stop_loss):
+    """
+    LEGACY: bracket order con shares intere.
+    Mantenuto per retrocompat, ma il nuovo flusso usa place_notional_buy + place_brackets_after_fill.
+    """
+    order = {
+        "symbol": symbol,
+        "qty": str(qty),
+        "side": "buy",
+        "type": "limit",
+        "time_in_force": "gtc",
+        "limit_price": str(round(limit_price, 2)),
+        "order_class": "bracket",
+        "take_profit": {"limit_price": str(round(take_profit, 2))},
+        "stop_loss": {"stop_price": str(round(stop_loss, 2))},
+    }
+    return await alpaca_request("POST", "{}/v2/orders".format(ALPACA_BASE), json=order)
+
+
+# ============================================
+# CANCEL / CLOSE
+# ============================================
+
+async def cancel_order(order_id):
+    return await alpaca_request("DELETE", "{}/v2/orders/{}".format(ALPACA_BASE, order_id))
+
+
+async def cancel_all_orders():
+    return await alpaca_request("DELETE", "{}/v2/orders".format(ALPACA_BASE))
+
+
+async def close_position(symbol):
+    return await alpaca_request("DELETE", "{}/v2/positions/{}".format(ALPACA_BASE, symbol))
+
+
+
+async def close_position_partial(symbol: str, qty: float):
+    """
+    🆕 v4.0 FASE 4 — Chiude parzialmente una posizione (X shares invece che tutta).
+    
+    Alpaca supporta partial close via query param `qty` sull'endpoint DELETE /positions/{symbol}.
+    Supporta anche fractional shares.
+    
+    Esempio: close_position_partial("NOW", 60.5) chiude 60.5 shares di NOW.
+    
+    Ritorna:
+    - dict con l'ordine sell creato (se successo)
+    - None se errore
+    """
+    if qty <= 0:
+        print(f"  ⚠️ close_position_partial: qty {qty} invalid for {symbol}")
+        return None
+    
+    qty_str = str(round(qty, 4))  # max 4 decimali per fractional
+    url = "{}/v2/positions/{}?qty={}".format(ALPACA_BASE, symbol, qty_str)
+    
+    result = await alpaca_request("DELETE", url)
+    
+    if result:
+        db = get_db()
+        await db.alpaca_orders.insert_one({
+            "order_id": result.get("id"),
+            "symbol": symbol,
+            "qty": float(qty),
+            "side": "sell",
+            "type": "partial_close",
+            "status": result.get("status"),
+            "created_at": datetime.utcnow(),
+            "raw": result,
+            "source": "apm_scale_out",
+        })
+        print(f"  🟡 PARTIAL CLOSE {symbol}: {qty_str} shares (id={result.get('id', '')[:8]})")
+    else:
+        print(f"  ❌ PARTIAL CLOSE FAILED {symbol}: qty={qty_str}")
+    
+    return result
+
+
+async def close_all_positions():
+    return await alpaca_request("DELETE", "{}/v2/positions".format(ALPACA_BASE))
+
+
+# ============================================
+# UPDATE STOP LOSS (modificato per qty float)
+# ============================================
+
+async def update_stop_loss(symbol, new_stop_price):
+    """
+    🔧 Update stop loss by cancelling old SL and placing new one.
+    Ora supporta qty float (fractional).
+    """
+    try:
+        orders = await get_orders(status="open", limit=100)
+        if not orders:
+            return None
+        for order in orders:
+            if (order.get("symbol") == symbol and
+                order.get("side") == "sell" and
+                order.get("type") == "stop" and
+                order.get("status") in ("new", "accepted", "pending_new")):
+                old_stop = float(order.get("stop_price", 0))
+                if new_stop_price > old_stop:
+                    await cancel_order(order["id"])
+                    # 🔧 qty preservato come stringa (può essere "3.809")
+                    qty_raw = order.get("qty", "1")
+                    new_order = await place_order(
+                        symbol=symbol,
+                        qty=qty_raw,  # passa la stringa originale (gestisce float)
+                        side="sell",
+                        order_type="stop",
+                        time_in_force="gtc",
+                        stop_price=new_stop_price
+                    )
+                    if new_order:
+                        print(f"  Updated SL {symbol}: ${old_stop} -> ${new_stop_price}")
+                        return new_order
+        return None
+    except Exception as e:
+        print(f"  Update SL error {symbol}: {e}")
+        return None
+
+
+async def get_latest_price(symbol):
+    url = "{}/v2/stocks/{}/quotes/latest".format(ALPACA_DATA, symbol)
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, headers=HEADERS)
+        if r.status_code == 200:
+            data = r.json()
+            quote = data.get("quote", {})
+            return (quote.get("ap", 0) + quote.get("bp", 0)) / 2
+    return None
+    # ============================================
+# PORTFOLIO HISTORY & SUMMARY
+# ============================================
+
+async def get_portfolio_history(period="1M", timeframe="1D"):
+    url = "{}/v2/account/portfolio/history?period={}&timeframe={}".format(ALPACA_BASE, period, timeframe)
+    return await alpaca_request("GET", url)
+
+
+async def get_alpaca_summary():
+    account = await get_account()
+    positions = await get_positions()
+    orders = await get_orders(status="all", limit=50)
+    history = await get_portfolio_history()
+    if not account:
+        return {"error": "Cannot connect to Alpaca"}
+    equity = float(account.get("equity", 0))
+    cash = float(account.get("cash", 0))
+    buying_power = float(account.get("buying_power", 0))
+    portfolio_value = float(account.get("portfolio_value", 0))
+    initial = float(account.get("last_equity", equity))
+    pnl = equity - initial
+    pnl_pct = (pnl / initial * 100) if initial > 0 else 0
+    pos_list = []
+    if positions:
+        for p in positions:
+            pos_list.append({
+                "symbol": p.get("symbol"),
+                "qty": float(p.get("qty", 0)),  # 🔧 ora float per fractional
+                "side": p.get("side"),
+                "entry_price": round(float(p.get("avg_entry_price", 0)), 2),
+                "current_price": round(float(p.get("current_price", 0)), 2),
+                "market_value": round(float(p.get("market_value", 0)), 2),
+                "pnl": round(float(p.get("unrealized_pl", 0)), 2),
+                "pnl_pct": round(float(p.get("unrealized_plpc", 0)) * 100, 2),
+                "change_today": round(float(p.get("change_today", 0)) * 100, 2),
+            })
+    order_list = []
+    if orders:
+        for o in orders[:20]:
+            order_data = {
+                "id": o.get("id"),
+                "symbol": o.get("symbol"),
+                "qty": o.get("qty"),
+                "notional": o.get("notional"),  # 🆕 mostra anche notional se presente
+                "side": o.get("side"),
+                "type": o.get("type"),
+                "status": o.get("status"),
+                "filled_avg_price": o.get("filled_avg_price"),
+                "filled_qty": o.get("filled_qty"),  # 🆕 utile per debug fractional
+                "created_at": o.get("created_at"),
+                "limit_price": o.get("limit_price"),
+                "stop_price": o.get("stop_price"),
+                "order_class": o.get("order_class"),
+            }
+            # Include bracket legs
+            if o.get("legs"):
+                order_data["legs"] = []
+                for leg in o["legs"]:
+                    order_data["legs"].append({
+                        "id": leg.get("id"),
+                        "symbol": leg.get("symbol"),
+                        "qty": leg.get("qty"),
+                        "side": leg.get("side"),
+                        "type": leg.get("type"),
+                        "status": leg.get("status"),
+                        "limit_price": leg.get("limit_price"),
+                        "stop_price": leg.get("stop_price"),
+                        "filled_avg_price": leg.get("filled_avg_price"),
+                    })
+            order_list.append(order_data)
+    equity_history = []
+    if history and history.get("equity"):
+        timestamps = history.get("timestamp", [])
+        equities = history.get("equity", [])
+        pnls = history.get("profit_loss_pct", [])
+        for i in range(len(timestamps)):
+            if equities[i]:
+                equity_history.append({
+                    "date": datetime.fromtimestamp(timestamps[i]).strftime("%Y-%m-%d"),
+                    "equity": round(equities[i], 2),
+                    "pnl_pct": round((pnls[i] or 0) * 100, 2),
+                })
+    return {
+        "connected": True,
+        "paper": settings.ALPACA_PAPER,
+        "equity": round(equity, 2),
+        "cash": round(cash, 2),
+        "buying_power": round(buying_power, 2),
+        "portfolio_value": round(portfolio_value, 2),
+        "daily_pnl": round(pnl, 2),
+        "daily_pnl_pct": round(pnl_pct, 2),
+        "positions": pos_list,
+        "orders": order_list,
+        "equity_history": equity_history,
+        "account_status": account.get("status"),
+    }
+
+
+# ============================================
+# LIVE PRICES
+# ============================================
+#
+# Il feed IEX gratuito copre una quota ridotta del volume USA. In sessione
+# regolare basta, ma fuori orario molti ETF possono non scambiare affatto:
+# in quel caso latestTrade resta quello della seduta precedente.
+#
+# Per questo non ci affidiamo all'orologio ma al TIMESTAMP del trade:
+# se l'ultimo scambio e' di ieri, il dato viene marcato come stale invece
+# di essere spacciato per prezzo di oggi.
+
+
+def _parse_alpaca_ts(value):
+    """
+    Converte un timestamp RFC-3339 Alpaca in datetime UTC.
+
+    Alpaca usa nanosecondi ("2026-09-22T13:45:30.123456789Z") che
+    fromisoformat non accetta: i decimali vengono troncati a microsecondi.
+    """
+    if not value:
+        return None
+
+    try:
+        text = str(value).replace("Z", "+00:00")
+
+        if "." in text:
+            head, tail = text.split(".", 1)
+            offset = ""
+            for marker in ("+", "-"):
+                if marker in tail:
+                    index = tail.index(marker)
+                    offset = tail[index:]
+                    tail = tail[:index]
+                    break
+            text = f"{head}.{tail[:6]}{offset}"
+
+        parsed = datetime.fromisoformat(text)
+
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+
+        return parsed.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def market_session_now():
+    """
+    Stato della sessione USA, come metadato.
+
+    NON viene usato per bloccare le analisi: serve solo a etichettare la
+    qualita' del dato. Le analisi girano sempre.
+    """
+    now = datetime.now(ZoneInfo("America/New_York"))
+
+    if now.weekday() >= 5:
+        session = "WEEKEND"
+    else:
+        minutes = now.hour * 60 + now.minute
+
+        if 570 <= minutes < 960:
+            session = "REGULAR"
+        elif 240 <= minutes < 570:
+            session = "PREMARKET"
+        elif 960 <= minutes < 1200:
+            session = "AFTERHOURS"
+        else:
+            session = "OVERNIGHT"
+
+    return {
+        "session": session,
+        "is_regular": session == "REGULAR",
+        "is_extended": session in ("PREMARKET", "AFTERHOURS"),
+        "today_et": now.strftime("%Y-%m-%d"),
+        "now_et": now.isoformat(),
+    }
+
+async def get_live_prices(symbols):
+    """
+    Prezzi correnti dai snapshot Alpaca.
+
+    Oltre al prezzo restituisce quando e' avvenuto l'ultimo scambio e se
+    quello scambio appartiene alla giornata odierna. Serve a distinguere
+    un titolo fermo da un titolo che semplicemente non ha ancora scambiato.
+
+    Campi aggiuntivi rispetto alla versione precedente:
+      trade_time      timestamp ISO dell'ultimo trade
+      traded_today    lo scambio e' di oggi
+      stale           nessuno scambio oggi: il prezzo e' della seduta scorsa
+      age_minutes     minuti trascorsi dall'ultimo scambio
+      session         sessione al momento della richiesta
+    """
+    if not symbols:
+        return {}
+
+    symbols_str = ",".join(symbols[:50])
+    url = "{}/v2/stocks/snapshots?symbols={}&feed=iex".format(ALPACA_DATA, symbols_str)
+
+    session = market_session_now()
+    now_utc = datetime.now(timezone.utc)
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            r = await client.get(url, headers=HEADERS)
+
+            if r.status_code != 200:
+                return {}
+
+            data = r.json()
+            prices = {}
+
+            for sym, snap in data.items():
+                latest = snap.get("latestTrade", {})
+                minute = snap.get("minuteBar", {})
+                daily = snap.get("dailyBar", {})
+                prev = snap.get("prevDailyBar", {})
+
+                price = latest.get("p", 0) or minute.get("c", 0) or daily.get("c", 0)
+
+                trade_dt = _parse_alpaca_ts(latest.get("t"))
+                trade_date_et = None
+                age_minutes = None
+
+                if trade_dt:
+                    trade_date_et = trade_dt.astimezone(
+                        ZoneInfo("America/New_York")
+                    ).strftime("%Y-%m-%d")
+                    age_minutes = round((now_utc - trade_dt).total_seconds() / 60, 1)
+
+                traded_today = trade_date_et == session["today_et"] if trade_date_et else False
+
+                # Il riferimento corretto dipende da cosa contiene dailyBar.
+                # Se c'e' gia' una barra di oggi, il confronto e' con
+                # prevDailyBar. Se la giornata non e' iniziata, dailyBar e'
+                # ancora quella della seduta precedente e va usata lei.
+                daily_date = None
+                daily_dt = _parse_alpaca_ts(daily.get("t"))
+
+                if daily_dt:
+                    daily_date = daily_dt.astimezone(
+                        ZoneInfo("America/New_York")
+                    ).strftime("%Y-%m-%d")
+
+                daily_is_today = daily_date == session["today_et"] if daily_date else False
+
+                if daily_is_today:
+                    reference_close = prev.get("c", 0) or price
+                else:
+                    reference_close = daily.get("c", 0) or prev.get("c", 0) or price
+
+                change = price - reference_close
+                change_pct = (change / reference_close * 100) if reference_close > 0 else 0
+
+                prices[sym] = {
+                    "price": round(price, 2),
+                    "prev_close": round(reference_close, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change_pct, 2),
+                    "volume": daily.get("v", 0),
+                    "high": round(daily.get("h", 0), 2),
+                    "low": round(daily.get("l", 0), 2),
+
+                    "trade_time": trade_dt.isoformat() if trade_dt else None,
+                    "trade_date_et": trade_date_et,
+                    "traded_today": traded_today,
+                    "stale": not traded_today,
+                    "age_minutes": age_minutes,
+                    "session": session["session"],
+                }
+
+            return prices
+
+        except Exception as e:
+            print("Live prices error: {}".format(e))
+            return {}
+
+
+async def get_crypto_prices(symbols=None):
+    """
+    Prezzi crypto dagli snapshot Alpaca.
+
+    Endpoint separato: /v2/stocks/snapshots copre solo le azioni, quindi
+    BTC/USD ed ETH/USD non vi compaiono. La crypto scambia 24 ore su 24 ed
+    e' l'unico proxy risk-on disponibile di notte e nei weekend.
+    """
+    symbols = symbols or ["BTC/USD", "ETH/USD"]
+    symbols_str = ",".join(symbols)
+
+    url = "{}/v1beta3/crypto/us/snapshots?symbols={}".format(ALPACA_DATA, symbols_str)
+    now_utc = datetime.now(timezone.utc)
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            r = await client.get(url, headers=HEADERS)
+
+            if r.status_code != 200:
+                print("Crypto prices error {}: {}".format(r.status_code, r.text[:120]))
+                return {}
+
+            data = r.json()
+            snapshots = data.get("snapshots", {})
+            prices = {}
+
+            for sym, snap in snapshots.items():
+                latest = snap.get("latestTrade", {})
+                minute = snap.get("minuteBar", {})
+                daily = snap.get("dailyBar", {})
+                prev = snap.get("prevDailyBar", {})
+
+                price = latest.get("p", 0) or minute.get("c", 0) or daily.get("c", 0)
+                prev_close = prev.get("c", 0) or price
+
+                change = price - prev_close
+                change_pct = (change / prev_close * 100) if prev_close > 0 else 0
+
+                trade_dt = _parse_alpaca_ts(latest.get("t"))
+                age_minutes = (
+                    round((now_utc - trade_dt).total_seconds() / 60, 1) if trade_dt else None
+                )
+
+                prices[sym] = {
+                    "price": round(price, 2),
+                    "prev_close": round(prev_close, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change_pct, 2),
+                    "volume": daily.get("v", 0),
+                    "trade_time": trade_dt.isoformat() if trade_dt else None,
+                    "traded_today": True,
+                    "stale": False,
+                    "age_minutes": age_minutes,
+                    "session": "CRYPTO_24_7",
+                }
+
+            return prices
+
+        except Exception as e:
+            print("Crypto prices error: {}".format(e))
+            return {}
+
+
+# ============================================
+# PORTFOLIO PERIODS (per benchmark chart)
+# ============================================
+
+async def get_portfolio_periods():
+    periods = {}
+    for label, period, tf in [
+        ("1D", "1D", "15Min"),
+        ("1W", "1W", "1D"),
+        ("1M", "1M", "1D"),
+        ("3M", "3M", "1D"),
+        ("6M", "6M", "1D"),
+        ("1Y", "1A", "1D"),
+        ("YTD", "1A", "1D"),
+    ]:
+        url = "{}/v2/account/portfolio/history?period={}&timeframe={}".format(ALPACA_BASE, period, tf)
+        async with httpx.AsyncClient(timeout=15) as client:
+            try:
+                r = await client.get(url, headers=HEADERS)
+                if r.status_code == 200:
+                    data = r.json()
+                    ts = data.get("timestamp", [])
+                    eq = data.get("equity", [])
+                    pl = data.get("profit_loss", [])
+                    plp = data.get("profit_loss_pct", [])
+                    points = []
+                    for i in range(len(ts)):
+                        if eq[i]:
+                            points.append({
+                                "date": str(ts[i]) if tf == "15Min" else datetime.fromtimestamp(ts[i]).strftime("%Y-%m-%d"),
+                                "equity": round(eq[i], 2),
+                                "pnl": round((pl[i] or 0), 2),
+                                "pnl_pct": round((plp[i] or 0) * 100, 2),
+                            })
+                    if points:
+                        periods[label] = points
+            except:
+                pass
+    return periods
+
+
+
+# ============================================
+# 🆕 v4.2 — MACRO BARS (per aggiornare market_regime)
+# ============================================
+
+async def get_bars_daily(symbol: str, limit: int = 60):
+    """
+    🆕 v4.2 — Fetcha bars daily da Alpaca IEX (gratis, live).
+    Usato per aggiornare macro ETF (SPY, QQQ, VXX, TLT, ecc.)
+    
+    Ritorna lista di dict: [{"t": timestamp, "o": open, "h": high, "l": low, "c": close, "v": volume}]
+    """
+    from datetime import datetime, timedelta
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=limit + 30)  # Buffer per weekend/holidays
+    
+    url = (
+        f"{ALPACA_DATA}/v2/stocks/bars"
+        f"?symbols={symbol}"
+        f"&timeframe=1Day"
+        f"&start={start_date.strftime('%Y-%m-%d')}"
+        f"&end={end_date.strftime('%Y-%m-%d')}"
+        f"&limit={limit}"
+        f"&feed=iex"
+    )
+    
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(url, headers=HEADERS)
+            if r.status_code == 200:
+                data = r.json()
+                bars = data.get("bars", {}).get(symbol, [])
+                return bars
+    except Exception as e:
+        print(f"  ⚠️ get_bars_daily error for {symbol}: {e}")
+    return []
+
+
+def _calc_rsi(prices, period=14):
+    """Calcola RSI da lista di prezzi close."""
+    if len(prices) < period + 1:
+        return 50.0
+    gains = []
+    losses = []
+    for i in range(1, len(prices)):
+        diff = prices[i] - prices[i-1]
+        if diff >= 0:
+            gains.append(diff)
+            losses.append(0)
+        else:
+            gains.append(0)
+            losses.append(abs(diff))
+    avg_gain = sum(gains[-period:]) / period
+    avg_loss = sum(losses[-period:]) / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return round(rsi, 2)
+
+
+def _calc_ema(prices, period):
+    """Calcola EMA da lista prezzi."""
+    if len(prices) < period:
+        return prices[-1] if prices else 0
+    k = 2 / (period + 1)
+    ema = sum(prices[:period]) / period
+    for price in prices[period:]:
+        ema = price * k + ema * (1 - k)
+    return round(ema, 2)
+
+
+async def fetch_macro_data_alpaca(symbols: list):
+    """
+    v4.3 — Fetch prezzi live via latest quotes + bars daily per RSI/EMA.
+    Combina: quote latest (prezzo intraday reale) + bars daily (indicatori tecnici).
+    """
+    from datetime import datetime
+    results = {}
+    
+    # STEP 1: Fetch latest quotes (prezzi REALI intraday)
+    symbols_str = ",".join(symbols)
+    quotes_url = f"{ALPACA_DATA}/v2/stocks/quotes/latest?symbols={symbols_str}&feed=iex"
+    latest_prices = {}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(quotes_url, headers=HEADERS)
+            if r.status_code == 200:
+                data = r.json()
+                quotes = data.get("quotes", {})
+                for sym, q in quotes.items():
+                    # Mid price = (bid + ask) / 2
+                    bid = q.get("bp", 0)
+                    ask = q.get("ap", 0)
+                    if bid > 0 and ask > 0:
+                        latest_prices[sym] = (bid + ask) / 2
+                    elif ask > 0:
+                        latest_prices[sym] = ask
+                    elif bid > 0:
+                        latest_prices[sym] = bid
+    except Exception as e:
+        print(f"  latest quotes error: {e}")
+    
+    # STEP 2: Fetch bars daily per RSI/EMA/change_pct
+    for symbol in symbols:
+        try:
+            bars = await get_bars_daily(symbol, limit=60)
+            
+            if not bars or len(bars) < 5:
+                print(f"  Not enough bars for {symbol}: {len(bars)}")
+                continue
+            
+            closes = [b.get("c", 0) for b in bars if b.get("c")]
+            if not closes:
+                continue
+            
+            # Prezzo LIVE (quote intraday) fallback a ultimo close
+            latest_price = latest_prices.get(symbol, closes[-1])
+            
+            prev_close = closes[-1]  # ultimo bar daily close (di ieri)
+            change_pct = ((latest_price - prev_close) / prev_close * 100) if prev_close > 0 else 0
+            
+            if len(closes) >= 21:
+                price_20d_ago = closes[-21]
+                return_20d = ((latest_price - price_20d_ago) / price_20d_ago * 100) if price_20d_ago > 0 else 0
+            else:
+                return_20d = 0
+            
+            # RSI/EMA su bars daily (usa il latest_price come ultimo punto)
+            closes_with_live = closes[:-1] + [latest_price]  # sostituisce ultimo close con live
+            rsi = _calc_rsi(closes_with_live)
+            ema20 = _calc_ema(closes_with_live, 20)
+            ema50 = _calc_ema(closes_with_live, 50) if len(closes_with_live) >= 50 else ema20
+            
+            results[symbol] = {
+                "symbol": symbol,
+                "price": round(latest_price, 2),
+                "change_pct": round(change_pct, 2),
+                "return_20d": round(return_20d, 2),
+                "rsi": rsi,
+                "ema20": ema20,
+                "ema50": ema50,
+                "updated_at": datetime.utcnow(),
+                "source": "alpaca_iex_live",
+            }
+            source_note = "LIVE" if symbol in latest_prices else "close"
+            print(f"  {symbol}: ${latest_price:.2f} ({change_pct:+.2f}%) RSI {rsi} [{source_note}]")
+        except Exception as e:
+            print(f"  fetch_macro error {symbol}: {e}")
+            continue
+    
+    return results
