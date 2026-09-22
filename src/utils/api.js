@@ -62,6 +62,8 @@ export const fetchApmSummary = (days = 7) => get(`/api/agents/apm/summary?days=$
 export const fetchMaxStrategyShadow = () => get('/api/data/max-strategy-shadow');
 export const fetchMaxStrategyRiskShadow = () => get('/api/data/max-strategy-risk-shadow');
 export const fetchMaxStrategyValidation = (limit = 100) => get(`/api/data/max-strategy-validation?limit=${limit}`);
+export const fetchMarketContext = () => get('/api/data/market-context');
+
 export const fetchSettings = () => get('/api/settings');
 export const saveSettings = (settings) => post('/api/settings', settings);
 export const fetchMlPredictions = () => get('/api/ml/predict/all');
