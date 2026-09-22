@@ -36,6 +36,17 @@ const PERIODS = [
   { label: '3Y', days: 750 },
 ];
 
+const smallButtonStyle = {
+  background: '#1e293b',
+  color: '#cbd5e1',
+  border: '1px solid #334155',
+  borderRadius: 7,
+  padding: '5px 8px',
+  fontSize: 10,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
 export default function Sectors({ sectors, setSelectedSector, setView }) {
   const [period, setPeriod] = useState(63);
   const [relativeData, setRelativeData] = useState(null);
@@ -43,6 +54,7 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
   const [error, setError] = useState('');
   const [selectedCodes, setSelectedCodes] = useState([]);
   const [focusCode, setFocusCode] = useState(null);
+  const [showToday, setShowToday] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -50,14 +62,21 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
     const loadRelativeStrength = async () => {
       setLoading(true);
       setError('');
+
       try {
-        const response = await fetch(`${API_URL}/api/sectors/relative-strength?days=${period}`);
+        const response = await fetch(
+          `${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true`,
+        );
         const data = await response.json();
+
         if (!response.ok || data.error) {
           throw new Error(data.error || 'Errore caricamento forza relativa');
         }
+
         if (!active) return;
+
         setRelativeData(data);
+
         const available = (data.series || []).map((item) => item.code);
         setSelectedCodes((current) => {
           const preserved = current.filter((code) => available.includes(code));
@@ -72,21 +91,52 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
     };
 
     loadRelativeStrength();
+
+    // Durante la seduta il punto proiettato cambia: rinfresca ogni 2 minuti.
+    const timer = setInterval(loadRelativeStrength, 120000);
+
     return () => {
       active = false;
+      clearInterval(timer);
     };
   }, [period]);
 
+  const projectionOn = Boolean(relativeData?.projection_available) && showToday;
+  const spyToday = relativeData?.spy_intraday_move_pct;
+
+  // Il punto di oggi viene disegnato su una serie separata, in tratteggio,
+  // collegata all'ultima chiusura. Cosi' resta chiaro che e' provvisorio
+  // e non si confonde con lo storico consolidato.
   const chartData = useMemo(() => {
     const rows = {};
+
     for (const sector of relativeData?.series || []) {
-      for (const point of sector.points || []) {
+      const points = sector.points || [];
+
+      points.forEach((point, index) => {
         if (!rows[point.date]) rows[point.date] = { date: point.date };
-        rows[point.date][sector.code] = point.value;
-      }
+
+        if (point.projected) {
+          if (!projectionOn) return;
+          rows[point.date][`${sector.code}__today`] = point.value;
+          rows[point.date][`${sector.code}__isToday`] = true;
+        } else {
+          rows[point.date][sector.code] = point.value;
+
+          // L'ultima chiusura appartiene a entrambe le serie: serve come
+          // punto di aggancio del tratteggio.
+          const isLastClose = index === points.length - 1
+            || (points[index + 1] && points[index + 1].projected);
+
+          if (isLastClose && projectionOn) {
+            rows[point.date][`${sector.code}__today`] = point.value;
+          }
+        }
+      });
     }
+
     return Object.values(rows).sort((a, b) => a.date.localeCompare(b.date));
-  }, [relativeData]);
+  }, [relativeData, projectionOn]);
 
   const visibleSeries = useMemo(
     () => (relativeData?.series || []).filter((item) => selectedCodes.includes(item.code)),
@@ -95,6 +145,7 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
 
   const ranking = relativeData?.ranking || [];
   const focusedStocks = relativeData?.best_stocks?.[focusCode] || [];
+  const projectedLeaders = relativeData?.projected_leaders || [];
 
   const toggleCode = (code) => {
     setSelectedCodes((current) => (
@@ -117,6 +168,42 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
     setFocusCode(bottom[0] || null);
   };
 
+  const renderTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+
+    const isToday = label === relativeData?.today;
+
+    const rows = payload
+      .filter((entry) => entry.value != null)
+      .map((entry) => ({
+        name: entry.name.replace('__today', ''),
+        value: entry.value,
+        color: entry.color,
+      }));
+
+    const unique = [];
+    const seen = new Set();
+    for (const row of rows) {
+      if (seen.has(row.name)) continue;
+      seen.add(row.name);
+      unique.push(row);
+    }
+
+    return (
+      <div style={{ background: '#111827', border: '1px solid #334155', borderRadius: 8, padding: 10, fontSize: 11 }}>
+        <div style={{ color: isToday ? '#fbbf24' : '#cbd5e1', fontWeight: 700, marginBottom: 6 }}>
+          {label}{isToday ? ' · in corso' : ''}
+        </div>
+        {unique.map((row) => (
+          <div key={row.name} style={{ color: row.color, display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+            <span>{row.name}</span>
+            <span>{Number(row.value).toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div>
       <h3 style={{ marginBottom: 14 }}>Sector Intelligence</h3>
@@ -129,6 +216,7 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
               Rapporto ETF/SPY indicizzato a 100. Sopra 100 significa sovraperformance nel periodo selezionato.
             </div>
           </div>
+
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {PERIODS.map((item) => (
               <button
@@ -151,29 +239,84 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
           </div>
         </div>
 
+        {relativeData?.market_open && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              padding: '9px 12px',
+              borderRadius: 9,
+              background: 'rgba(251,191,36,.07)',
+              border: '1px solid rgba(251,191,36,.25)',
+              marginBottom: 12,
+            }}
+          >
+            <div style={{ fontSize: 11, color: '#fcd34d' }}>
+              <b>Seduta in corso</b>
+              {spyToday != null && (
+                <span style={{ color: '#fde68a' }}>
+                  {' '}· SPY {spyToday >= 0 ? '+' : ''}{Number(spyToday).toFixed(2)}%
+                </span>
+              )}
+              {projectedLeaders.length > 0 && (
+                <span style={{ color: '#fde68a' }}> · oggi guidano {projectedLeaders.join(', ')}</span>
+              )}
+              <div style={{ color: '#a16207', fontSize: 10, marginTop: 3 }}>
+                Il punto tratteggiato e' provvisorio: cambia fino alla chiusura.
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowToday(!showToday)}
+              style={{
+                ...smallButtonStyle,
+                background: showToday ? '#78350f' : '#1e293b',
+                color: showToday ? '#fcd34d' : '#94a3b8',
+                border: `1px solid ${showToday ? '#b45309' : '#334155'}`,
+              }}
+            >
+              {showToday ? 'Nascondi oggi' : 'Mostra oggi'}
+            </button>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
           <button onClick={() => setSelectedCodes((relativeData?.series || []).map((item) => item.code))} style={smallButtonStyle}>Tutti</button>
           <button onClick={() => setSelectedCodes([])} style={smallButtonStyle}>Nessuno</button>
           <button onClick={showTopThree} style={smallButtonStyle}>Top 3</button>
           <button onClick={showBottomThree} style={smallButtonStyle}>Bottom 3</button>
-          {ranking.map((item) => (
-            <button
-              key={item.code}
-              onClick={() => toggleCode(item.code)}
-              style={{
-                background: selectedCodes.includes(item.code) ? `${COLORS[item.code]}22` : '#111827',
-                color: selectedCodes.includes(item.code) ? COLORS[item.code] : '#64748b',
-                border: `1px solid ${selectedCodes.includes(item.code) ? COLORS[item.code] : '#1e293b'}`,
-                borderRadius: 7,
-                padding: '5px 8px',
-                fontSize: 10,
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              {item.code} {item.relative_return_pct >= 0 ? '+' : ''}{item.relative_return_pct.toFixed(1)}%
-            </button>
-          ))}
+
+          {ranking.map((item) => {
+            const selected = selectedCodes.includes(item.code);
+            const move = item.intraday_move_pct;
+
+            return (
+              <button
+                key={item.code}
+                onClick={() => toggleCode(item.code)}
+                style={{
+                  background: selected ? `${COLORS[item.code]}22` : '#111827',
+                  color: selected ? COLORS[item.code] : '#64748b',
+                  border: `1px solid ${selected ? COLORS[item.code] : '#1e293b'}`,
+                  borderRadius: 7,
+                  padding: '5px 8px',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                {item.code} {item.relative_return_pct >= 0 ? '+' : ''}{item.relative_return_pct.toFixed(1)}%
+                {projectionOn && move != null && (
+                  <span style={{ color: move >= 0 ? '#34d399' : '#f87171', marginLeft: 5, fontSize: 9 }}>
+                    oggi {move >= 0 ? '+' : ''}{move.toFixed(1)}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {loading && <div style={{ color: '#94a3b8', fontSize: 12, padding: 20 }}>Caricamento grafico...</div>}
@@ -185,11 +328,18 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
               <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
               <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 9 }} interval="preserveStartEnd" />
               <YAxis tick={{ fill: '#64748b', fontSize: 9 }} domain={['auto', 'auto']} tickFormatter={(value) => value.toFixed(0)} />
-              <Tooltip
-                contentStyle={{ background: '#111827', border: '1px solid #334155', borderRadius: 8, fontSize: 11 }}
-                formatter={(value, name) => [`${Number(value).toFixed(2)}`, name]}
-              />
+              <Tooltip content={renderTooltip} />
               <ReferenceLine y={100} stroke="#94a3b8" strokeDasharray="5 5" />
+
+              {projectionOn && relativeData?.last_close_date && (
+                <ReferenceLine
+                  x={relativeData.last_close_date}
+                  stroke="#fbbf24"
+                  strokeDasharray="2 4"
+                  strokeOpacity={0.5}
+                />
+              )}
+
               {visibleSeries.map((item) => (
                 <Line
                   key={item.code}
@@ -203,18 +353,40 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
                   onClick={() => setFocusCode(item.code)}
                 />
               ))}
+
+              {projectionOn && visibleSeries.map((item) => (
+                <Line
+                  key={`${item.code}__today`}
+                  type="linear"
+                  dataKey={`${item.code}__today`}
+                  name={item.code}
+                  stroke={COLORS[item.code]}
+                  strokeWidth={focusCode === item.code ? 2.6 : 1.5}
+                  strokeDasharray="4 3"
+                  dot={{ r: 3, fill: '#0f172a', stroke: COLORS[item.code], strokeWidth: 2 }}
+                  connectNulls
+                  legendType="none"
+                />
+              ))}
             </LineChart>
           </ResponsiveContainer>
         )}
 
         <div style={{ color: '#64748b', fontSize: 10, marginTop: 8 }}>
-          Periodo realmente eseguito: {relativeData?.executed_days || 0} sedute, dal {relativeData?.start_date || 'N/D'} al {relativeData?.end_date || 'N/D'}.
+          Barre chiuse: {relativeData?.executed_days || 0} sedute, dal {relativeData?.start_date || 'N/D'} al {relativeData?.last_close_date || 'N/D'}.
+          {projectionOn && <span style={{ color: '#fbbf24' }}> Tratteggio: seduta del {relativeData?.today} ancora aperta.</span>}
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(280px, 0.8fr)', gap: 14, marginBottom: 18 }}>
         <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, overflow: 'hidden' }}>
-          <div style={{ padding: 12, color: '#f8fafc', fontWeight: 800 }}>Ranking settori</div>
+          <div style={{ padding: 12, color: '#f8fafc', fontWeight: 800 }}>
+            Ranking settori
+            <span style={{ color: '#64748b', fontSize: 10, fontWeight: 400, marginLeft: 8 }}>
+              su barre chiuse
+            </span>
+          </div>
+
           {ranking.map((item) => (
             <div
               key={item.code}
@@ -224,7 +396,7 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
               }}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '36px 64px 1fr 88px 88px',
+                gridTemplateColumns: '32px 58px 1fr 84px 76px 72px',
                 gap: 8,
                 alignItems: 'center',
                 padding: '9px 12px',
@@ -236,12 +408,22 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
             >
               <span style={{ color: '#64748b' }}>#{item.rank}</span>
               <span style={{ color: COLORS[item.code], fontWeight: 800 }}>{item.code}</span>
-              <span style={{ color: '#cbd5e1' }}>{item.name}</span>
+              <span style={{ color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+
               <span style={{ color: item.relative_return_pct >= 0 ? '#34d399' : '#f87171', fontWeight: 700 }}>
                 {item.relative_return_pct >= 0 ? '+' : ''}{item.relative_return_pct.toFixed(2)}%
               </span>
-              <span style={{ color: item.acceleration_20d >= 0 ? '#34d399' : '#f87171' }}>
+
+              <span style={{ color: item.acceleration_20d >= 0 ? '#34d399' : '#f87171', fontSize: 10 }}>
                 Acc {item.acceleration_20d >= 0 ? '+' : ''}{item.acceleration_20d.toFixed(2)}
+              </span>
+
+              <span style={{ fontSize: 10, color: '#64748b' }}>
+                {projectionOn && item.intraday_move_pct != null ? (
+                  <span style={{ color: item.intraday_move_pct >= 0 ? '#fbbf24' : '#f87171' }}>
+                    oggi {item.intraday_move_pct >= 0 ? '+' : ''}{item.intraday_move_pct.toFixed(1)}%
+                  </span>
+                ) : '—'}
               </span>
             </div>
           ))}
@@ -249,26 +431,50 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
 
         <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, overflow: 'hidden' }}>
           <div style={{ padding: 12, color: '#f8fafc', fontWeight: 800 }}>Best stock in {focusCode || 'settore'}</div>
+
           {focusedStocks.length === 0 && <div style={{ padding: 14, color: '#64748b', fontSize: 11 }}>Nessun asset disponibile.</div>}
+
           {focusedStocks.map((stock) => {
             const approved = stock.status === 'CANDIDATE' && stock.alpha_confluence >= stock.threshold;
             const missingSnapshot = stock.status === 'NO_ALPHA_SNAPSHOT';
+
             return (
               <div key={stock.ticker} style={{ padding: '10px 12px', borderTop: '1px solid #1e293b' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                   <span style={{ color: '#f8fafc', fontWeight: 800 }}>{stock.ticker}</span>
-                  <span style={{ color: approved ? '#34d399' : missingSnapshot ? '#94a3b8' : '#fbbf24', background: approved ? '#052e16' : missingSnapshot ? '#1e293b' : '#451a03', borderRadius: 6, padding: '3px 7px', fontSize: 9, fontWeight: 800 }}>
+                  <span
+                    style={{
+                      color: approved ? '#34d399' : missingSnapshot ? '#94a3b8' : '#fbbf24',
+                      background: approved ? '#052e16' : missingSnapshot ? '#1e293b' : '#451a03',
+                      borderRadius: 6,
+                      padding: '3px 7px',
+                      fontSize: 9,
+                      fontWeight: 800,
+                    }}
+                  >
                     {approved ? 'CANDIDATO' : missingSnapshot ? 'ATTESA SCAN' : 'SOTTO SOGLIA'}
                   </span>
                 </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 7 }}>
-                  <div style={{ color: '#64748b', fontSize: 9 }}>Setup<div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.score || 0).toFixed(1)}</div></div>
-                  <div style={{ color: '#64748b', fontSize: 9 }}>Pre-settore<div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.confluence_before_sector || 0).toFixed(1)}</div></div>
-                  <div style={{ color: '#64748b', fontSize: 9 }}>Finale<div style={{ color: approved ? '#34d399' : '#fbbf24', fontWeight: 800 }}>{Number(stock.alpha_confluence || 0).toFixed(1)}</div></div>
+                  <div style={{ color: '#64748b', fontSize: 9 }}>
+                    Setup
+                    <div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.score || 0).toFixed(1)}</div>
+                  </div>
+                  <div style={{ color: '#64748b', fontSize: 9 }}>
+                    Pre-settore
+                    <div style={{ color: '#cbd5e1', fontWeight: 700 }}>{Number(stock.confluence_before_sector || 0).toFixed(1)}</div>
+                  </div>
+                  <div style={{ color: '#64748b', fontSize: 9 }}>
+                    Finale
+                    <div style={{ color: approved ? '#34d399' : '#fbbf24', fontWeight: 800 }}>{Number(stock.alpha_confluence || 0).toFixed(1)}</div>
+                  </div>
                 </div>
+
                 <div style={{ color: stock.sector_adjustment >= 0 ? '#34d399' : '#f87171', fontSize: 10, marginTop: 5 }}>
                   Settore #{stock.sector_rank || '-'} | Adj {stock.sector_adjustment >= 0 ? '+' : ''}{Number(stock.sector_adjustment || 0).toFixed(1)} | {stock.sector_reason}
                 </div>
+
                 <div style={{ color: '#94a3b8', fontSize: 10, marginTop: 3 }}>
                   {stock.setup_type} | RSI {stock.rsi} | Weekly {stock.weekly_trend} | R/R {Number(stock.risk_reward || 0).toFixed(2)}{stock.poc_shift ? ' | POC Shift' : ''}
                 </div>
@@ -294,10 +500,13 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
                 <span style={{ fontWeight: 700 }}>{sector.code}</span>
                 <span style={{ color: getScoreColor(sector.composite_score), fontWeight: 700 }}>{sector.composite_score?.toFixed(1)}</span>
               </div>
+
               <div style={{ color: '#64748b', fontSize: 12 }}>{sector.name}</div>
+
               <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
                 ${sector.price} | RSI {sector.rsi} | Str {sector.strength_score >= 0 ? '+' : ''}{sector.strength_score?.toFixed(1)}
               </div>
+
               <div style={{ fontSize: 9, color: '#475569', marginTop: 4 }}>
                 {sector.updated_at
                   ? new Date(sector.updated_at.endsWith('Z') ? sector.updated_at : `${sector.updated_at}Z`).toLocaleString('it-IT', {
@@ -309,6 +518,7 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
                   })
                   : 'N/D'}
               </div>
+
               {sector.history && (
                 <ResponsiveContainer width="100%" height={40}>
                   <AreaChart data={sector.history.slice(-30)}>
@@ -329,14 +539,3 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
     </div>
   );
 }
-
-const smallButtonStyle = {
-  background: '#1e293b',
-  color: '#cbd5e1',
-  border: '1px solid #334155',
-  borderRadius: 7,
-  padding: '5px 8px',
-  fontSize: 10,
-  fontWeight: 700,
-  cursor: 'pointer',
-};
