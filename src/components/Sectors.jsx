@@ -5,6 +5,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -77,6 +78,9 @@ const smallButtonStyle = {
 export default function Sectors({ sectors, setSelectedSector, setView }) {
   const [period, setPeriod] = useState(63);
   const [relativeData, setRelativeData] = useState(null);
+  const [breadthData, setBreadthData] = useState(null);
+  const [chartMode, setChartMode] = useState('relative');
+  const [showMethodology, setShowMethodology] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedCodes, setSelectedCodes] = useState([]);
@@ -91,18 +95,16 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
       setError('');
 
       try {
-        const response = await fetch(
-          `${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true`,
-        );
-        const data = await response.json();
-
-        if (!response.ok || data.error) {
-          throw new Error(data.error || 'Errore caricamento forza relativa');
-        }
-
+        const [relativeResponse, breadthResponse] = await Promise.all([
+          fetch(`${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true`),
+          fetch(`${API_URL}/api/sectors/breadth-bottom?days=${period}`),
+        ]);
+        const [data, breadth] = await Promise.all([relativeResponse.json(), breadthResponse.json()]);
+        if (!relativeResponse.ok || data.error) throw new Error(data.error || 'Errore caricamento forza relativa');
+        if (!breadthResponse.ok || breadth.error) throw new Error(breadth.error || 'Errore caricamento Sector Bottom Breadth');
         if (!active) return;
-
         setRelativeData(data);
+        setBreadthData(breadth);
 
         const available = (data.series || []).map((item) => item.code);
         setSelectedCodes((current) => {
@@ -165,6 +167,21 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
     return Object.values(rows).sort((a, b) => a.date.localeCompare(b.date));
   }, [relativeData, projectionOn]);
 
+  const breadthChartData = useMemo(() => {
+    const rows = {};
+    for (const sector of breadthData?.series || []) {
+      for (const point of sector.points || []) {
+        if (!rows[point.date]) rows[point.date] = { date: point.date };
+        rows[point.date][sector.code] = point.above_sma200_pct;
+        if (sector.code === focusCode) {
+          rows[point.date][`${sector.code}__sma20`] = point.above_sma20_pct;
+          rows[point.date][`${sector.code}__sma50`] = point.above_sma50_pct;
+        }
+      }
+    }
+    return Object.values(rows).sort((a, b) => a.date.localeCompare(b.date));
+  }, [breadthData, focusCode]);
+
   const visibleSeries = useMemo(
     () => (relativeData?.series || []).filter((item) => selectedCodes.includes(item.code)),
     [relativeData, selectedCodes],
@@ -193,6 +210,20 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
     const bottom = ranking.slice(-3).map((item) => item.code);
     setSelectedCodes(bottom);
     setFocusCode(bottom[0] || null);
+  };
+
+  const bottomStateColor = (state) => ({ WASHOUT: '#ef4444', BOTTOM_IN_FORMAZIONE: '#f59e0b', RECUPERO_DA_CORREZIONE: '#38bdf8', RECUPERO_DIFFUSO: '#22c55e', RECLAIM_CONFERMATO: '#10b981', NESSUN_BOTTOM: '#64748b' }[state] || '#64748b');
+  const bottomStateLabel = (state) => ({ WASHOUT: 'WASHOUT', BOTTOM_IN_FORMAZIONE: 'BOTTOM IN FORMAZIONE', RECUPERO_DA_CORREZIONE: 'RECUPERO DA CORREZIONE', RECUPERO_DIFFUSO: 'RECUPERO DIFFUSO', RECLAIM_CONFERMATO: 'RECLAIM CONFERMATO', NESSUN_BOTTOM: 'NESSUN BOTTOM' }[state] || state || 'N/D');
+  const breadthRanking = breadthData?.ranking || [];
+  const breadthSeries = (breadthData?.series || []).filter((item) => selectedCodes.includes(item.code));
+  const filterBreadth = (states) => {
+    const codes = breadthRanking.filter((item) => states.includes(item.state)).map((item) => item.code);
+    setSelectedCodes(codes);
+    setFocusCode(codes[0] || null);
+  };
+  const renderBreadthTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return <div style={{ background: '#111827', border: '1px solid #334155', borderRadius: 8, padding: 10, fontSize: 11 }}><div style={{ color: '#cbd5e1', fontWeight: 700, marginBottom: 6 }}>{label}</div>{payload.filter((entry) => entry.value != null).map((entry) => <div key={entry.dataKey} style={{ color: entry.color, display: 'flex', justifyContent: 'space-between', gap: 14 }}><span>{entry.name}</span><span>{Number(entry.value).toFixed(1)}%</span></div>)}</div>;
   };
 
   const renderTooltip = ({ active, payload, label }) => {
@@ -231,8 +262,12 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
   return (
     <div>
       <h3 style={{ marginBottom: 14 }}>Sector Intelligence</h3>
+      <div style={{ display: 'flex', gap: 7, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button onClick={() => setChartMode('relative')} style={{ ...smallButtonStyle, background: chartMode === 'relative' ? '#2563eb' : '#1e293b', color: chartMode === 'relative' ? '#fff' : '#94a3b8' }}>Forza vs SPY</button>
+        <button onClick={() => setChartMode('breadth')} style={{ ...smallButtonStyle, background: chartMode === 'breadth' ? '#7c3aed' : '#1e293b', color: chartMode === 'breadth' ? '#fff' : '#94a3b8' }}>Sector Bottom Breadth</button>
+      </div>
 
-      <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+      <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 12, padding: 16, marginBottom: 16, display: chartMode === 'relative' ? 'block' : 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
           <div>
             <div style={{ color: '#f8fafc', fontWeight: 800, fontSize: 16 }}>Forza relativa settori vs SPY</div>
@@ -424,6 +459,23 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
         </div>
       </div>
 
+      {chartMode === 'breadth' && <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ color: '#f8fafc', fontWeight: 800, fontSize: 16 }}>Partecipazione interna e potenziale bottom settoriale</div>
+        <div style={{ color: '#64748b', fontSize: 11, marginTop: 3, marginBottom: 12 }}>% equal-weighted di aziende sopra la propria SMA200. Sul settore selezionato compaiono anche SMA20 e SMA50.</div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button onClick={() => setSelectedCodes((breadthData?.series || []).map((item) => item.code))} style={smallButtonStyle}>Tutti</button>
+          <button onClick={() => setSelectedCodes([])} style={smallButtonStyle}>Nessuno</button>
+          <button onClick={() => filterBreadth(['WASHOUT'])} style={smallButtonStyle}>Washout</button>
+          <button onClick={() => filterBreadth(['BOTTOM_IN_FORMAZIONE'])} style={smallButtonStyle}>Bottom</button>
+          <button onClick={() => filterBreadth(['RECUPERO_DA_CORREZIONE', 'RECUPERO_DIFFUSO', 'RECLAIM_CONFERMATO'])} style={smallButtonStyle}>In recupero</button>
+        </div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>{breadthRanking.map((item) => { const selected = selectedCodes.includes(item.code); return <button key={item.code} onClick={() => toggleCode(item.code)} style={{ background: selected ? `${COLORS[item.code]}22` : '#111827', color: selected ? COLORS[item.code] : '#64748b', border: `1px solid ${selected ? COLORS[item.code] : '#1e293b'}`, borderRadius: 7, padding: '5px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>{item.code} {Number(item.above_sma200_pct || 0).toFixed(1)}% · <span style={{ color: bottomStateColor(item.state) }}>{bottomStateLabel(item.state)}</span></button>; })}</div>
+        {loading && <div style={{ color: '#94a3b8', fontSize: 12, padding: 20 }}>Caricamento grafico...</div>}
+        {error && <div style={{ color: '#f87171', fontSize: 12, padding: 20 }}>{error}</div>}
+        {!loading && !error && breadthChartData.length > 1 && <ResponsiveContainer width="100%" height={360}><LineChart data={breadthChartData} margin={{ top: 10, right: 22, left: 0, bottom: 5 }}><CartesianGrid stroke="#1e293b" strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 9 }} interval="preserveStartEnd" /><YAxis tick={{ fill: '#64748b', fontSize: 9 }} domain={[0, 100]} tickFormatter={(value) => `${value}%`} /><Tooltip content={renderBreadthTooltip} /><ReferenceArea y1={0} y2={20} fill="#7f1d1d" fillOpacity={0.18} /><ReferenceArea y1={20} y2={40} fill="#78350f" fillOpacity={0.10} /><ReferenceLine y={20} stroke="#ef4444" strokeDasharray="5 5" label={{ value: 'Washout', fill: '#f87171', fontSize: 9 }} /><ReferenceLine y={50} stroke="#64748b" strokeDasharray="4 4" />{breadthSeries.map((item) => <Line key={item.code} type="monotone" dataKey={item.code} name={`${item.code} SMA200`} stroke={COLORS[item.code]} strokeWidth={focusCode === item.code ? 3 : 1.7} dot={false} connectNulls onClick={() => setFocusCode(item.code)} />)}{focusCode && <><Line type="monotone" dataKey={`${focusCode}__sma20`} name={`${focusCode} SMA20`} stroke="#f8fafc" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls /><Line type="monotone" dataKey={`${focusCode}__sma50`} name={`${focusCode} SMA50`} stroke="#fbbf24" strokeWidth={2} strokeDasharray="3 3" dot={false} connectNulls /></>}</LineChart></ResponsiveContainer>}
+        <div style={{ color: '#64748b', fontSize: 10, marginTop: 8 }}>Breadth equal-weighted su {breadthData?.executed_days || 0} sedute, dal {breadthData?.start_date || 'N/D'} al {breadthData?.end_date || 'N/D'}. Indicatore visuale, nessun impatto sugli ordini.</div>
+        <div style={{ borderTop: '1px solid #1e293b', marginTop: 12, paddingTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}><div><strong style={{ color: '#f8fafc' }}>Come viene calcolato</strong><div style={{ color: '#94a3b8', fontSize: 10, marginTop: 3 }}>Score 0-100: washout storico, recupero breadth, stabilizzazione dei nuovi minimi e partecipazione.</div></div><button onClick={() => setShowMethodology(!showMethodology)} style={smallButtonStyle}>{showMethodology ? 'Nascondi guida' : 'Apri guida'}</button></div>{showMethodology && <div style={{ color: '#cbd5e1', fontSize: 11, lineHeight: 1.65, marginTop: 10, display: 'grid', gap: 6 }}><div><strong>Breadth:</strong> percentuale equal-weighted delle aziende sopra SMA20, SMA50 e SMA200.</div><div><strong>Washout:</strong> breadth SMA200 molto bassa in assoluto e rispetto alla distribuzione annuale.</div><div><strong>Recupero:</strong> aumento della breadth SMA20 in 5 sedute e SMA50 in 10 sedute.</div><div><strong>Stabilizzazione:</strong> diminuzione delle aziende su nuovi minimi a 20 sedute.</div><div><strong>Attenzione:</strong> WASHOUT indica debolezza estrema, non un acquisto. BOTTOM IN FORMAZIONE richiede recupero e minori nuovi minimi.</div></div>}</div>
+      </div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(280px, 0.8fr)', gap: 14, marginBottom: 18 }}>
         <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, overflow: 'hidden' }}>
           <div style={{ padding: 12, color: '#f8fafc', fontWeight: 800 }}>
