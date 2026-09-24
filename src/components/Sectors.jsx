@@ -90,6 +90,7 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
     const loadRelativeStrength = async (showLoader = false) => {
       if (showLoader && !hasLoadedRef.current) {
@@ -98,14 +99,30 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
       }
 
       try {
+        const cacheKey = Date.now();
         const [relativeResponse, breadthResponse] = await Promise.all([
-          fetch(`${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true`),
-          fetch(`${API_URL}/api/sectors/breadth-bottom?days=${period}`),
+          fetch(`${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true&_=${cacheKey}`, {
+            cache: 'no-store',
+            signal: controller.signal,
+          }),
+          fetch(`${API_URL}/api/sectors/breadth-bottom?days=${period}&_=${cacheKey}`, {
+            cache: 'no-store',
+            signal: controller.signal,
+          }),
         ]);
-        const [data, breadth] = await Promise.all([relativeResponse.json(), breadthResponse.json()]);
-        if (!relativeResponse.ok || data.error) throw new Error(data.error || 'Errore caricamento forza relativa');
-        if (!breadthResponse.ok || breadth.error) throw new Error(breadth.error || 'Errore caricamento Sector Bottom Breadth');
+        const [data, breadth] = await Promise.all([
+          relativeResponse.json(),
+          breadthResponse.json(),
+        ]);
+
+        if (!relativeResponse.ok || data.error) {
+          throw new Error(data.error || 'Errore caricamento forza relativa');
+        }
+        if (!breadthResponse.ok || breadth.error) {
+          throw new Error(breadth.error || 'Errore caricamento Sector Bottom Breadth');
+        }
         if (!active) return;
+
         setRelativeData(data);
         setBreadthData(breadth);
         hasLoadedRef.current = true;
@@ -116,20 +133,26 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
           const preserved = current.filter((code) => available.includes(code));
           return preserved.length ? preserved : available;
         });
-        setFocusCode((current) => current || data.ranking?.[0]?.code || null);
+        setFocusCode((current) => (
+          current && available.includes(current)
+            ? current
+            : data.ranking?.[0]?.code || null
+        ));
       } catch (loadError) {
-        if (active && !hasLoadedRef.current) setError(loadError.message);
+        if (loadError.name !== 'AbortError' && active && !hasLoadedRef.current) {
+          setError(loadError.message);
+        }
       } finally {
         if (active && showLoader) setLoading(false);
       }
     };
 
-    loadRelativeStrength(true);
-
+    loadRelativeStrength(!hasLoadedRef.current);
     const timer = setInterval(() => loadRelativeStrength(false), 300000);
 
     return () => {
       active = false;
+      controller.abort();
       clearInterval(timer);
     };
   }, [period]);
