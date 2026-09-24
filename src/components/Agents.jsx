@@ -67,6 +67,7 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
   const [maxShadow, setMaxShadow] = useState(null);
   const [riskShadow, setRiskShadow] = useState(null);
   const [validation, setValidation] = useState(null);
+  const [validationFilter, setValidationFilter] = useState('ACTIONABLE');
 
   const ps = agentsStatus?.pipeline_state;
   const agents = agentsStatus?.agents || {};
@@ -80,7 +81,7 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
     setLoadingExtra(true);
     const [status, summary, history, alphaShadow, riskSizing, validationData] = await Promise.all([
       fetchApmStatus(), fetchApmSummary(7), fetchApmHistory(8),
-      fetchMaxStrategyShadow(), fetchMaxStrategyRiskShadow(), fetchMaxStrategyValidation(100),
+      fetchMaxStrategyShadow(), fetchMaxStrategyRiskShadow(), fetchMaxStrategyValidation(500),
     ]);
     setApm({ status, summary, history: history?.decisions || [] });
     setMaxShadow(alphaShadow);
@@ -108,6 +109,44 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
   const alphaCounts = maxShadow?.action_counts || {};
   const riskCounts = riskShadow?.decision_counts || {};
   const validationSummary = validation?.summary || {};
+  const validationSignals = validation?.signals || [];
+  const validationCohorts = useMemo(() => validationSignals.reduce((acc, signal) => {
+    const cohort = signal.validation_cohort || 'NON_CLASSIFICATO';
+    acc[cohort] = (acc[cohort] || 0) + 1;
+    return acc;
+  }, {}), [validationSignals]);
+  const actionableSignals = useMemo(
+    () => validationSignals.filter((signal) => signal.validation_cohort === 'ACTIONABLE'),
+    [validationSignals],
+  );
+  const activatedSignals = useMemo(
+    () => actionableSignals.filter((signal) => signal.outcomes?.entry_triggered),
+    [actionableSignals],
+  );
+  const mature5dSignals = useMemo(
+    () => activatedSignals.filter((signal) => signal.outcomes?.return_5d_pct != null),
+    [activatedSignals],
+  );
+  const averageMetric = (rows, key) => {
+    const values = rows.map((row) => Number(row.outcomes?.[key])).filter(Number.isFinite);
+    if (!values.length) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
+  const activatedMfe = averageMetric(activatedSignals, 'mfe_pct');
+  const activatedMae = averageMetric(activatedSignals, 'mae_pct');
+  const average5d = averageMetric(mature5dSignals, 'return_5d_pct');
+  const validationRows = useMemo(() => validationSignals.filter((signal) => {
+    if (validationFilter === 'ALL') return true;
+    if (validationFilter === 'ACTIVATED') return signal.validation_cohort === 'ACTIONABLE' && signal.outcomes?.entry_triggered;
+    return signal.validation_cohort === validationFilter;
+  }).slice(0, 100), [validationSignals, validationFilter]);
+  const cohortColor = (cohort) => ({
+    ACTIONABLE: COLORS.green,
+    RETEST_WATCH: COLORS.blue,
+    TRIGGER_WATCH: COLORS.amber,
+    INVALID: COLORS.red,
+    LEGACY_INVALID: COLORS.muted,
+  }[cohort] || COLORS.muted);
   const systemState = agentsLoading || loadingExtra ? 'AGGIORNAMENTO' : Object.values(pipeline.steps || {}).includes('error') ? 'ATTENZIONE' : 'OPERATIVO';
   const stateColor = systemState === 'OPERATIVO' ? COLORS.green : systemState === 'ATTENZIONE' ? COLORS.red : COLORS.amber;
 
@@ -183,7 +222,56 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
         <div style={{ ...panel, padding: 14, marginBottom: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}><div><h3 style={{ margin: 0, fontSize: 15 }}>Max Strategy v1.5.2</h3><div style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>Weekly context · Daily confirmation · 4H refined con fallback Daily</div></div><div style={{ display: 'flex', gap: 6 }}><Badge color={COLORS.purple}>SHADOW</Badge><Badge color={COLORS.red}>ORDINI LIVE OFF</Badge></div></div></div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 8, marginBottom: 12 }}><Kpi label="Would Arm" value={alphaCounts.WOULD_ARM || 0} color={COLORS.blue} /><Kpi label="Would Buy" value={alphaCounts.WOULD_BUY || 0} color={COLORS.green} /><Kpi label="Would Wait" value={alphaCounts.WOULD_WAIT || 0} color={COLORS.amber} /><Kpi label="Would Reject" value={alphaCounts.WOULD_REJECT || 0} color={COLORS.red} /><Kpi label="Risk Approve" value={riskCounts.WOULD_APPROVE || 0} color={COLORS.green} /><Kpi label="Risk Reduce" value={riskCounts.WOULD_REDUCE || 0} color={COLORS.amber} /><Kpi label="Risk Reject" value={riskCounts.WOULD_REJECT || 0} color={COLORS.red} /></div>
         <section style={{ ...panel, padding: 12, overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1050, fontSize: 11 }}><thead><tr style={{ color: COLORS.muted, textAlign: 'left' }}>{['Ticker','Alpha','Risk','Piano','Fase','Prezzo','Trigger','Max entry','Invalidazione','Size teorica','Rischio','Motivo'].map((label) => <th key={label} style={{ padding: '8px 7px', borderBottom: `1px solid ${COLORS.border}` }}>{label}</th>)}</tr></thead><tbody>{maxRows.map((row) => <tr key={row.ticker} style={{ borderBottom: `1px solid ${COLORS.border}` }}><td style={{ padding: 8, fontWeight: 800 }}>{row.ticker}</td><td><Badge color={row.shadow_action === 'WOULD_BUY' ? COLORS.green : row.shadow_action === 'WOULD_ARM' ? COLORS.blue : row.shadow_action === 'WOULD_REJECT' ? COLORS.red : COLORS.amber}>{row.shadow_action}</Badge></td><td>{row.risk ? <Badge color={row.risk.risk_shadow_decision === 'WOULD_APPROVE' ? COLORS.green : row.risk.risk_shadow_decision === 'WOULD_REDUCE' ? COLORS.amber : COLORS.red}>{row.risk.risk_shadow_decision}</Badge> : '—'}</td><td>{row.plan_status}</td><td>{row.market_phase || '—'}</td><td>{row.signal_price ?? '—'}</td><td>{row.trigger_price ?? '—'}</td><td>{row.maximum_entry_price ?? '—'}</td><td>{row.invalidation_price ?? '—'}</td><td>{row.risk ? `${row.risk.shadow_qty} · ${money(row.risk.shadow_notional)}` : '—'}</td><td>{row.risk ? `${money(row.risk.shadow_risk_usd)} (${row.risk.portfolio_risk_pct}%)` : '—'}</td><td style={{ color: COLORS.muted, maxWidth: 260 }}>{(row.risk?.rejection_reasons?.length ? row.risk.rejection_reasons : row.rejection_reasons || []).join(', ') || '—'}</td></tr>)}</tbody></table>{!maxRows.length && <div style={{ padding: 24, textAlign: 'center', color: COLORS.muted }}>Nessun candidato Shadow disponibile. Se la route Risk Shadow non è ancora esposta, la pagina continuerà a mostrare i dati Alpha e Validation.</div>}</section>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginTop: 12 }}><Kpi label="Snapshot point-in-time" value={validationSummary.total || 0} hint="max_strategy_signals" /><Kpi label="Trigger raggiunti" value={validationSummary.trigger_reached || 0} /><Kpi label="Invalidazioni" value={validationSummary.invalidation_reached || 0} color={COLORS.red} /><Kpi label="Outcome 5/10/20d" value={`${validationSummary.completed_5d || 0}/${validationSummary.completed_10d || 0}/${validationSummary.completed_20d || 0}`} /></div>
+        <section style={{ ...panel, padding: 14, marginTop: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 14 }}>Validazione point-in-time</h3>
+              <div style={{ color: COLORS.muted, fontSize: 10, marginTop: 4 }}>La performance operativa usa solo i piani ACTIONABLE attivati al trigger.</div>
+            </div>
+            <Badge color={mature5dSignals.length ? COLORS.green : COLORS.amber}>{mature5dSignals.length ? 'CAMPIONE 5D ATTIVO' : 'CAMPIONE NON MATURO'}</Badge>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8, marginTop: 12 }}>
+            <Kpi label="Snapshot totali" value={validationSummary.total || validationSignals.length} hint="Tutte le coorti" />
+            <Kpi label="Actionable" value={validationCohorts.ACTIONABLE || 0} color={COLORS.green} hint="Piani operativi validi" />
+            <Kpi label="Attivati" value={activatedSignals.length} color={COLORS.green} hint="Trigger realmente raggiunto" />
+            <Kpi label="Retest Watch" value={validationCohorts.RETEST_WATCH || 0} color={COLORS.blue} hint="Non sono trade" />
+            <Kpi label="Trigger Watch" value={validationCohorts.TRIGGER_WATCH || 0} color={COLORS.amber} hint="Gate non completi" />
+            <Kpi label="Invalidi" value={(validationCohorts.INVALID || 0) + (validationCohorts.LEGACY_INVALID || 0)} color={COLORS.red} hint={`${validationCohorts.LEGACY_INVALID || 0} legacy`} />
+            <Kpi label="MFE medio" value={activatedMfe == null ? 'N/D' : `${activatedMfe.toFixed(2)}%`} color={COLORS.green} hint="Solo trade attivati" />
+            <Kpi label="MAE medio" value={activatedMae == null ? 'N/D' : `${activatedMae.toFixed(2)}%`} color={COLORS.red} hint="Solo trade attivati" />
+            <Kpi label="Return medio 5d" value={average5d == null ? 'N/D' : `${average5d.toFixed(2)}%`} color={average5d == null ? COLORS.muted : average5d >= 0 ? COLORS.green : COLORS.red} hint={`${mature5dSignals.length} outcome maturi`} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+            {[
+              ['ACTIONABLE', 'Actionable'],
+              ['ACTIVATED', 'Attivati'],
+              ['RETEST_WATCH', 'Retest Watch'],
+              ['TRIGGER_WATCH', 'Trigger Watch'],
+              ['INVALID', 'Invalidi'],
+              ['LEGACY_INVALID', 'Legacy'],
+              ['ALL', 'Tutti'],
+            ].map(([key, label]) => <button key={key} onClick={() => setValidationFilter(key)} style={{ background: validationFilter === key ? `${cohortColor(key)}22` : COLORS.panel2, color: validationFilter === key ? cohortColor(key) : COLORS.muted, border: `1px solid ${validationFilter === key ? cohortColor(key) : COLORS.border}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>{label}</button>)}
+          </div>
+          <div style={{ overflowX: 'auto', marginTop: 10 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1180, fontSize: 10 }}>
+              <thead><tr style={{ color: COLORS.muted, textAlign: 'left' }}>{['Ticker','Coorte','Stato','Segnale','Ingresso','Trigger attivo','Data trigger','MFE','MAE','Return 5d','Motivi'].map((label) => <th key={label} style={{ padding: '7px 6px', borderBottom: `1px solid ${COLORS.border}` }}>{label}</th>)}</tr></thead>
+              <tbody>{validationRows.map((signal) => <tr key={signal._id || signal.setup_key} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                <td style={{ padding: 7, fontWeight: 800 }}>{signal.ticker}</td>
+                <td><Badge color={cohortColor(signal.validation_cohort)}>{signal.validation_cohort || 'NON_CLASSIFICATO'}</Badge></td>
+                <td>{signal.status || '—'}</td>
+                <td>{signal.signal_price ?? '—'}</td>
+                <td>{signal.entry_reference_price ?? '—'}</td>
+                <td><Badge color={signal.outcomes?.entry_triggered ? COLORS.green : COLORS.muted}>{signal.outcomes?.entry_triggered ? 'SÌ' : 'NO'}</Badge></td>
+                <td>{signal.outcomes?.entry_triggered_at || '—'}</td>
+                <td style={{ color: signal.outcomes?.mfe_pct != null ? COLORS.green : COLORS.muted }}>{signal.outcomes?.mfe_pct == null ? '—' : `${Number(signal.outcomes.mfe_pct).toFixed(2)}%`}</td>
+                <td style={{ color: signal.outcomes?.mae_pct != null ? COLORS.red : COLORS.muted }}>{signal.outcomes?.mae_pct == null ? '—' : `${Number(signal.outcomes.mae_pct).toFixed(2)}%`}</td>
+                <td style={{ color: signal.outcomes?.return_5d_pct == null ? COLORS.muted : Number(signal.outcomes.return_5d_pct) >= 0 ? COLORS.green : COLORS.red }}>{signal.outcomes?.return_5d_pct == null ? '—' : `${Number(signal.outcomes.return_5d_pct).toFixed(2)}%`}</td>
+                <td style={{ color: COLORS.muted, maxWidth: 280 }}>{(signal.rejection_reasons || []).join(', ') || '—'}</td>
+              </tr>)}</tbody>
+            </table>
+            {!validationRows.length && <div style={{ padding: 20, textAlign: 'center', color: COLORS.muted }}>Nessun record per il filtro selezionato.</div>}
+          </div>
+        </section>
       </>}
     </div>
   );
