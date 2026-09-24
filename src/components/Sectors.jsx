@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -86,13 +86,16 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
   const [selectedCodes, setSelectedCodes] = useState([]);
   const [focusCode, setFocusCode] = useState(null);
   const [showToday, setShowToday] = useState(true);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
 
-    const loadRelativeStrength = async () => {
-      setLoading(true);
-      setError('');
+    const loadRelativeStrength = async (showLoader = false) => {
+      if (showLoader && !hasLoadedRef.current) {
+        setLoading(true);
+        setError('');
+      }
 
       try {
         const [relativeResponse, breadthResponse] = await Promise.all([
@@ -105,6 +108,8 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
         if (!active) return;
         setRelativeData(data);
         setBreadthData(breadth);
+        hasLoadedRef.current = true;
+        setError('');
 
         const available = (data.series || []).map((item) => item.code);
         setSelectedCodes((current) => {
@@ -113,17 +118,15 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
         });
         setFocusCode((current) => current || data.ranking?.[0]?.code || null);
       } catch (loadError) {
-        if (active) setError(loadError.message);
+        if (active && !hasLoadedRef.current) setError(loadError.message);
       } finally {
-        if (active) setLoading(false);
+        if (active && showLoader) setLoading(false);
       }
     };
 
-    loadRelativeStrength();
+    loadRelativeStrength(true);
 
-    // L'analisi e sempre attiva: il punto di oggi cambia mentre il mercato
-    // scambia, quindi si rinfresca a intervalli regolari.
-    const timer = setInterval(loadRelativeStrength, 120000);
+    const timer = setInterval(() => loadRelativeStrength(false), 300000);
 
     return () => {
       active = false;
