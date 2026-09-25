@@ -97,51 +97,25 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
         setLoading(true);
         setError('');
       }
-
       try {
-        const cacheKey = Date.now();
-        const [relativeResponse, breadthResponse] = await Promise.all([
-          fetch(`${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true&_=${cacheKey}`, {
-            cache: 'no-store',
-            signal: controller.signal,
-          }),
-          fetch(`${API_URL}/api/sectors/breadth-bottom?days=${period}&_=${cacheKey}`, {
-            cache: 'no-store',
-            signal: controller.signal,
-          }),
-        ]);
-        const [data, breadth] = await Promise.all([
-          relativeResponse.json(),
-          breadthResponse.json(),
-        ]);
-
-        if (!relativeResponse.ok || data.error) {
-          throw new Error(data.error || 'Errore caricamento forza relativa');
-        }
-        if (!breadthResponse.ok || breadth.error) {
-          throw new Error(breadth.error || 'Errore caricamento Sector Bottom Breadth');
-        }
+        const response = await fetch(
+          `${API_URL}/api/sectors/relative-strength?days=${period}&include_today=true&_=${Date.now()}`,
+          { cache: 'no-store', signal: controller.signal },
+        );
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error || 'Errore caricamento forza relativa');
         if (!active) return;
-
         setRelativeData(data);
-        setBreadthData(breadth);
         hasLoadedRef.current = true;
         setError('');
-
         const available = (data.series || []).map((item) => item.code);
         setSelectedCodes((current) => {
           const preserved = current.filter((code) => available.includes(code));
           return preserved.length ? preserved : available;
         });
-        setFocusCode((current) => (
-          current && available.includes(current)
-            ? current
-            : data.ranking?.[0]?.code || null
-        ));
+        setFocusCode((current) => current && available.includes(current) ? current : data.ranking?.[0]?.code || null);
       } catch (loadError) {
-        if (loadError.name !== 'AbortError' && active && !hasLoadedRef.current) {
-          setError(loadError.message);
-        }
+        if (loadError.name !== 'AbortError' && active && !hasLoadedRef.current) setError(loadError.message);
       } finally {
         if (active && showLoader) setLoading(false);
       }
@@ -149,13 +123,46 @@ export default function Sectors({ sectors, setSelectedSector, setView }) {
 
     loadRelativeStrength(!hasLoadedRef.current);
     const timer = setInterval(() => loadRelativeStrength(false), 300000);
-
     return () => {
       active = false;
       controller.abort();
       clearInterval(timer);
     };
   }, [period]);
+
+  useEffect(() => {
+    if (chartMode !== 'breadth' || breadthData) return undefined;
+    let active = true;
+    const controller = new AbortController();
+
+    const loadBreadth = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const response = await fetch(
+          `${API_URL}/api/sectors/breadth-bottom?days=252`,
+          { signal: controller.signal },
+        );
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error || 'Errore caricamento Sector Bottom Breadth');
+        if (!active) return;
+        setBreadthData(data);
+        const available = (data.series || []).map((item) => item.code);
+        setSelectedCodes(available);
+        setFocusCode(data.ranking?.[0]?.code || available[0] || null);
+      } catch (loadError) {
+        if (loadError.name !== 'AbortError' && active) setError(loadError.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadBreadth();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [chartMode, breadthData]);
 
   const projectionOn = Boolean(relativeData?.projection_available) && showToday;
   const spyToday = relativeData?.spy_intraday_move_pct;
