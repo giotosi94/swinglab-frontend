@@ -18,6 +18,8 @@ export default function BacktestWidget() {
   const [sectorIntelligence, setSectorIntelligence] = useState(false);
   const [dynamicSizing, setDynamicSizing] = useState(false);
   const [apmExitProxy, setApmExitProxy] = useState(false);
+  const [trendLeadership, setTrendLeadership] = useState(false);
+  const [parkSpy, setParkSpy] = useState(false);
 
   const runBacktest = async () => {
     setLoading(true);
@@ -35,6 +37,8 @@ export default function BacktestWidget() {
         use_sector_intelligence: String(sectorIntelligence),
         use_dynamic_sizing: String(dynamicSizing),
         use_apm_exit_proxy: String(apmExitProxy),
+        use_trend_leadership: String(trendLeadership),
+        park_cash_in_spy: String(parkSpy),
         t1_ratio: "0.40",
         t2_ratio: "0.70",
         t3_ratio: "1.00",
@@ -71,6 +75,11 @@ export default function BacktestWidget() {
   const sizingStats = result?.sizing_stats || {};
   const sectorIntelligenceStats = result?.sector_intelligence_stats || {};
   const dataCoverage = result?.data_coverage || {};
+  const channelMetrics = result?.channel_metrics || {};
+  const alphaChannel = channelMetrics.ALPHA || {};
+  const trendChannel = channelMetrics.TREND || {};
+  const trendStats = result?.trend_stats || {};
+  const parkStats = result?.park_stats || {};
   const chartData = (result?.equity_curve || []).map((point) => ({
     date: point.date,
     equity: point.equity,
@@ -159,6 +168,14 @@ export default function BacktestWidget() {
               <input type="checkbox" checked={sectorIntelligence} onChange={(event) => setSectorIntelligence(event.target.checked)} />
               Sector Intelligence point-in-time
             </label>
+            <label style={{ ...toggleStyle, color: "#a78bfa", fontWeight: 700 }}>
+              <input type="checkbox" checked={trendLeadership} onChange={(event) => setTrendLeadership(event.target.checked)} />
+              Trend Leadership point-in-time
+            </label>
+            <label style={{ ...toggleStyle, color: "#a78bfa", fontWeight: 700 }}>
+              <input type="checkbox" checked={parkSpy} onChange={(event) => setParkSpy(event.target.checked)} />
+              Liquidita' in SPY in regime BULL
+            </label>
             <label style={{ ...toggleStyle, color: "#94a3b8" }}>
               <input type="checkbox" checked={rotation} onChange={(event) => setRotation(event.target.checked)} />
               Rotazione settoriale, solo test informativo
@@ -202,6 +219,17 @@ export default function BacktestWidget() {
               ["SI Win Rate", `${Number(sectorIntelligenceStats.promoted_win_rate || 0).toFixed(1)}%`],
               ["SI Profit Factor", Number(sectorIntelligenceStats.promoted_profit_factor || 0).toFixed(2)],
               ["SI P&L promosso", `$${Number(sectorIntelligenceStats.promoted_pnl_dollar || 0).toLocaleString()}`],
+              ["ALPHA posizioni", alphaChannel.total_positions || 0],
+              ["ALPHA Profit Factor", Number(alphaChannel.profit_factor || 0).toFixed(2)],
+              ["ALPHA P&L", `$${Number(alphaChannel.pnl_dollar || 0).toLocaleString()}`],
+              ["TREND posizioni", trendChannel.total_positions || 0],
+              ["TREND Win Rate", `${Number(trendChannel.win_rate || 0).toFixed(1)}%`],
+              ["TREND Profit Factor", Number(trendChannel.profit_factor || 0).toFixed(2)],
+              ["TREND P&L", `$${Number(trendChannel.pnl_dollar || 0).toLocaleString()}`],
+              ["TREND uscite EMA50", trendStats.trend_exit_ema50 || 0],
+              ["TREND bloccati settore", trendStats.sector_blocked || 0],
+              ["SPY parcheggio medio", `${Number(parkStats.avg_parked_pct || 0).toFixed(1)}%`],
+              ["Giorni parcheggio", parkStats.parked_days || 0],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "#111827", borderRadius: 7, padding: 9, border: "1px solid #1e293b" }}>
                 <div style={{ color: "#64748b", fontSize: 9 }}>{label}</div>
@@ -214,7 +242,7 @@ export default function BacktestWidget() {
             Periodo richiesto {dataCoverage.requested_days || days}, eseguito {dataCoverage.executed_days || 0}; copertura {dataCoverage.tickers_complete || 0}/{dataCoverage.tickers_total || 0} ticker; barre min/mediana/max {dataCoverage.bars_min || 0}/{dataCoverage.bars_median || 0}/{dataCoverage.bars_max || 0}.
           </div>
           <div style={{ marginTop: 12, padding: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8" }}>
-            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}.
+            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}, Trend {config.use_trend_leadership ? `ON (${config.trend_slots} slot)` : "OFF"}, parcheggio SPY {config.park_cash_in_spy ? "ON" : "OFF"}.
           </div>
 
           {(result.validation_notes || []).map((note) => (
