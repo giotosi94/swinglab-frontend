@@ -32,6 +32,40 @@ export default function TradingChannels() {
   const [maxState, setMaxState] = useState(null);
   const [maxBusy, setMaxBusy] = useState(false);
   const [maxError, setMaxError] = useState(null);
+  const [trendState, setTrendState] = useState(null);
+  const [trendBusy, setTrendBusy] = useState(false);
+
+  const loadTrend = async () => {
+    try {
+      const results = await Promise.all(MAX_AGENTS.map((agent) =>
+        fetch(`${API}/api/agents/${agent}/params`).then((r) => r.json())
+      ));
+      const values = results.map((r) => Boolean(r?.params?.trend_live_enabled));
+      setTrendState({
+        enabled: values.every(Boolean),
+        aligned: values[0] === values[1],
+        slots: results[1]?.params?.trend_live_slots ?? 4,
+      });
+    } catch (e) {
+      setTrendState(null);
+    }
+  };
+
+  const toggleTrend = async () => {
+    if (!trendState) return;
+    const next = trendState.enabled ? 0 : 1;
+    if (!window.confirm(`Vuoi ${next ? 'ATTIVARE' : 'DISATTIVARE'} Trend Leadership live? Gli ordini sono su Alpaca paper.`)) return;
+    setTrendBusy(true);
+    try {
+      for (const agent of MAX_AGENTS) {
+        await fetch(`${API}/api/agents/${agent}/set-param?key=trend_live_enabled&value=${next}`, { method: 'POST' });
+      }
+      await loadTrend();
+    } catch (e) {
+      setTrendState(null);
+    }
+    setTrendBusy(false);
+  };
 
   const loadMax = async () => {
     try {
@@ -68,7 +102,10 @@ export default function TradingChannels() {
     setMaxBusy(false);
   };
 
-  useEffect(() => { loadMax(); }, []);
+  useEffect(() => { loadMax(); loadTrend(); }, []);
+
+  const trendOn = trendState?.enabled;
+  const trendColor = trendOn ? '#a78bfa' : '#64748b';
 
   const maxOn = maxState?.enabled;
   const maxColor = maxOn ? '#f59e0b' : '#64748b';
@@ -114,8 +151,31 @@ export default function TradingChannels() {
 
         <CrashDeployToggle />
 
-        <Row title="📈 Trend Leadership" color="#334155" badge="IN ARRIVO" badgeColor="#64748b">
-          Leader vicini ai massimi, più forti di SPY. Validato solo nel backtest.
+        <Row
+          title="📈 Trend Leadership"
+          color={trendColor}
+          badge={trendState ? (trendOn ? 'LIVE' : 'OFF') : '...'}
+          badgeColor={trendColor}
+          right={(
+            <button
+              onClick={toggleTrend}
+              disabled={trendBusy || !trendState}
+              style={{
+                padding: '8px 16px', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 12,
+                cursor: trendBusy ? 'not-allowed' : 'pointer', color: 'white',
+                background: trendOn ? '#ef4444' : '#7c3aed', opacity: trendBusy ? 0.6 : 1,
+              }}
+            >
+              {trendBusy ? '...' : trendOn ? 'Disattiva' : 'Attiva'}
+            </button>
+          )}
+        >
+          Leader vicini ai massimi e più forti di SPY su 6 mesi. {trendState ? `${trendState.slots} slot riservati, uscita sotto la EMA50, stop 3-12%.` : ''}
+          {trendState && !trendState.aligned && (
+            <div style={{ color: '#fbbf24', marginTop: 4 }}>
+              ⚠️ Alpha e RiskManager non sono allineati: premi il pulsante per riallinearli.
+            </div>
+          )}
         </Row>
         <Row title="🧱 Core SPY 60%" color="#334155" badge="IN ARRIVO" badgeColor="#64748b">
           Quota fissa in SPY per seguire il mercato. Validata solo nel backtest.
