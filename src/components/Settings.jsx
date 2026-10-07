@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API } from '../utils/constants';
+import TradingChannels from './TradingChannels';
 
 export default function Settings({ settings, setSettings, saveSettings, settingsSaving }) {
   const [presets, setPresets] = useState({});
@@ -55,6 +56,7 @@ export default function Settings({ settings, setSettings, saveSettings, settings
   return (
     <div>
       <h2 style={{ marginBottom: 20 }}>⚙️ Settings</h2>
+      <TradingChannels />
 
       {/* HEADER — Attuale profilo */}
       {currentPreset && presets[currentPreset] && (
