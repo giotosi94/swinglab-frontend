@@ -20,6 +20,9 @@ export default function BacktestWidget() {
   const [apmExitProxy, setApmExitProxy] = useState(false);
   const [trendLeadership, setTrendLeadership] = useState(false);
   const [parkSpy, setParkSpy] = useState(false);
+  const [coreSpy, setCoreSpy] = useState(0);
+  const [trendSlots, setTrendSlots] = useState(4);
+  const [trendPerSector, setTrendPerSector] = useState(3);
   const [jobStatus, setJobStatus] = useState(null);
   const pollRef = useRef(null);
 
@@ -72,6 +75,9 @@ export default function BacktestWidget() {
         use_apm_exit_proxy: String(apmExitProxy),
         use_trend_leadership: String(trendLeadership),
         park_cash_in_spy: String(parkSpy),
+        core_spy_pct: String(coreSpy),
+        trend_slots: String(trendSlots),
+        trend_max_per_sector: String(trendPerSector),
         t1_ratio: "0.40",
         t2_ratio: "0.70",
         t3_ratio: "1.00",
@@ -120,6 +126,8 @@ export default function BacktestWidget() {
   const trendChannel = channelMetrics.TREND || {};
   const trendStats = result?.trend_stats || {};
   const parkStats = result?.park_stats || {};
+  const coreStats = result?.core_stats || {};
+  const crashStats = result?.crash_stats || {};
   const chartData = (result?.equity_curve || []).map((point) => ({
     date: point.date,
     equity: point.equity,
@@ -176,6 +184,18 @@ export default function BacktestWidget() {
             <div>
               <label style={labelStyle}><span>Max posizioni</span><strong style={{ color: "white" }}>{maxPos}</strong></label>
               <input type="range" min={5} max={15} step={1} value={maxPos} onChange={(event) => setMaxPos(Number(event.target.value))} disabled={usePreset} style={{ ...sliderStyle, opacity: usePreset ? 0.35 : 1 }} />
+            </div>
+            <div>
+              <label style={labelStyle}><span>Core SPY fisso</span><strong style={{ color: "#a78bfa" }}>{coreSpy}%</strong></label>
+              <input type="range" min={0} max={80} step={10} value={coreSpy} onChange={(event) => setCoreSpy(Number(event.target.value))} style={sliderStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}><span>Slot Trend</span><strong style={{ color: "#a78bfa" }}>{trendSlots}</strong></label>
+              <input type="range" min={1} max={8} step={1} value={trendSlots} onChange={(event) => setTrendSlots(Number(event.target.value))} disabled={!trendLeadership} style={{ ...sliderStyle, opacity: trendLeadership ? 1 : 0.35 }} />
+            </div>
+            <div>
+              <label style={labelStyle}><span>Trend max per settore</span><strong style={{ color: "#a78bfa" }}>{trendPerSector}</strong></label>
+              <input type="range" min={1} max={6} step={1} value={trendPerSector} onChange={(event) => setTrendPerSector(Number(event.target.value))} disabled={!trendLeadership} style={{ ...sliderStyle, opacity: trendLeadership ? 1 : 0.35 }} />
             </div>
           </div>
 
@@ -274,6 +294,14 @@ export default function BacktestWidget() {
               ["TREND bloccati settore", trendStats.sector_blocked || 0],
               ["SPY parcheggio medio", `${Number(parkStats.avg_parked_pct || 0).toFixed(1)}%`],
               ["Giorni parcheggio", parkStats.parked_days || 0],
+              ["SPY Sharpe", Number(benchmark.spy_sharpe || 0).toFixed(2)],
+              ["SPY Max DD", `${Number(benchmark.spy_max_drawdown_pct || 0).toFixed(2)}%`],
+              ["Sharpe vs SPY", Number(benchmark.sharpe_vs_spy || 0).toFixed(2)],
+              ["DD migliore di SPY", `${Number(benchmark.drawdown_vs_spy || 0).toFixed(2)}%`],
+              ["Core SPY P&L", `$${Number(coreStats.core_pnl_dollar || 0).toLocaleString()}`],
+              ["Crash SPY P&L", `$${Number(crashStats.spy_pnl_dollar || 0).toLocaleString()}`],
+              ["Crash deploy", crashStats.deploy_events || 0],
+              ["Universo con barre", `${dataCoverage.universe_with_bars || 0}/${dataCoverage.universe_assets || 0}`],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "#111827", borderRadius: 7, padding: 9, border: "1px solid #1e293b" }}>
                 <div style={{ color: "#64748b", fontSize: 9 }}>{label}</div>
@@ -286,7 +314,7 @@ export default function BacktestWidget() {
             Periodo richiesto {dataCoverage.requested_days || days}, eseguito {dataCoverage.executed_days || 0}; copertura {dataCoverage.tickers_complete || 0}/{dataCoverage.tickers_total || 0} ticker; barre min/mediana/max {dataCoverage.bars_min || 0}/{dataCoverage.bars_median || 0}/{dataCoverage.bars_max || 0}.
           </div>
           <div style={{ marginTop: 12, padding: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8" }}>
-            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}, Trend {config.use_trend_leadership ? `ON (${config.trend_slots} slot)` : "OFF"}, parcheggio SPY {config.park_cash_in_spy ? "ON" : "OFF"}.
+            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}, Trend {config.use_trend_leadership ? `ON (${config.trend_slots} slot)` : "OFF"}, parcheggio SPY {config.park_cash_in_spy ? "ON" : "OFF"}, core SPY {config.core_spy_pct || 0}%{config.use_trend_leadership ? `, trend max/settore ${config.trend_max_per_sector}` : ""}.
           </div>
 
           {(result.validation_notes || []).map((note) => (
