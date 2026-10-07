@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { API_URL } from "../utils/constants";
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
@@ -20,6 +20,39 @@ export default function BacktestWidget() {
   const [apmExitProxy, setApmExitProxy] = useState(false);
   const [trendLeadership, setTrendLeadership] = useState(false);
   const [parkSpy, setParkSpy] = useState(false);
+  const [jobStatus, setJobStatus] = useState(null);
+  const pollRef = useRef(null);
+
+  const pollJob = async (jobId) => {
+    try {
+      const response = await fetch(`${API_URL}/api/data/backtest/job/${jobId}`);
+      const job = await response.json();
+      setJobStatus(job);
+      if (job.status === "done") {
+        setResult(job.result);
+        setLoading(false);
+        return;
+      }
+      if (job.status === "error" || job.status === "not_found") {
+        setResult({ error: job.error || "Backtest non trovato" });
+        setLoading(false);
+        window.localStorage.removeItem("swinglab_backtest_job");
+        return;
+      }
+      pollRef.current = window.setTimeout(() => pollJob(jobId), 3000);
+    } catch (error) {
+      pollRef.current = window.setTimeout(() => pollJob(jobId), 5000);
+    }
+  };
+
+  useEffect(() => {
+    const savedJob = window.localStorage.getItem("swinglab_backtest_job");
+    if (savedJob) {
+      setLoading(true);
+      pollJob(savedJob);
+    }
+    return () => window.clearTimeout(pollRef.current);
+  }, []);
 
   const runBacktest = async () => {
     setLoading(true);
@@ -57,12 +90,19 @@ export default function BacktestWidget() {
         params.set("min_confluence", String(minConf));
       }
 
-      const response = await fetch(`${API_URL}/api/data/backtest/run?${params.toString()}`, { method: "POST" });
+      const response = await fetch(`${API_URL}/api/data/backtest/start?${params.toString()}`, { method: "POST" });
       const data = await response.json();
-      setResult(response.ok ? data : { error: data.detail || "Backtest fallito" });
+      if (!response.ok || !data.job_id) {
+        setResult({ error: data.detail || data.message || "Backtest non avviato" });
+        setLoading(false);
+        return;
+      }
+      window.localStorage.setItem("swinglab_backtest_job", data.job_id);
+      setJobStatus({ status: data.status, job_id: data.job_id });
+      window.clearTimeout(pollRef.current);
+      pollJob(data.job_id);
     } catch (error) {
       setResult({ error: `Errore backtest: ${error.message}` });
-    } finally {
       setLoading(false);
     }
   };
@@ -184,7 +224,11 @@ export default function BacktestWidget() {
         </div>
       )}
 
-      {loading && <p style={{ color: "#94a3b8", fontSize: 13 }}>Simulazione in corso...</p>}
+      {loading && (
+        <p style={{ color: "#94a3b8", fontSize: 13 }}>
+          Simulazione in background{jobStatus?.status ? ` (${jobStatus.status})` : ""}{jobStatus?.elapsed_s != null ? `, ${jobStatus.elapsed_s}s` : ""}. Puoi cambiare pagina: il risultato resta disponibile.
+        </p>
+      )}
       {result?.error && <p style={{ color: "#f87171", fontSize: 13 }}>{result.error}</p>}
 
       {result && !result.error && (
