@@ -23,8 +23,39 @@ export default function BacktestWidget() {
   const [coreSpy, setCoreSpy] = useState(0);
   const [trendSlots, setTrendSlots] = useState(4);
   const [trendPerSector, setTrendPerSector] = useState(3);
+  const [maxStrategy, setMaxStrategy] = useState(false);
+  const [maxSlots, setMaxSlots] = useState(3);
+  const [maxStopCap, setMaxStopCap] = useState(15);
+  const [scanStatus, setScanStatus] = useState(null);
+  const [scanBusy, setScanBusy] = useState(false);
   const [jobStatus, setJobStatus] = useState(null);
   const pollRef = useRef(null);
+  const scanPollRef = useRef(null);
+
+  const loadScanStatus = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/data/max-scan/status`);
+      const data = await response.json();
+      setScanStatus(data);
+      window.clearTimeout(scanPollRef.current);
+      if (data.running_now) {
+        scanPollRef.current = window.setTimeout(loadScanStatus, 15000);
+      }
+    } catch (error) {
+      setScanStatus({ status: "error", error: error.message });
+    }
+  };
+
+  const scanAction = async (action) => {
+    setScanBusy(true);
+    try {
+      const url = action === "stop" ? "/api/data/max-scan/stop" : `/api/data/max-scan/start?restart=${action === "restart" ? "true" : "false"}`;
+      await fetch(`${API_URL}${url}`, { method: "POST" });
+      window.setTimeout(loadScanStatus, 1500);
+    } finally {
+      setScanBusy(false);
+    }
+  };
 
   const pollJob = async (jobId) => {
     try {
@@ -54,7 +85,11 @@ export default function BacktestWidget() {
       setLoading(true);
       pollJob(savedJob);
     }
-    return () => window.clearTimeout(pollRef.current);
+    loadScanStatus();
+    return () => {
+      window.clearTimeout(pollRef.current);
+      window.clearTimeout(scanPollRef.current);
+    };
   }, []);
 
   const runBacktest = async () => {
@@ -78,6 +113,9 @@ export default function BacktestWidget() {
         core_spy_pct: String(coreSpy),
         trend_slots: String(trendSlots),
         trend_max_per_sector: String(trendPerSector),
+        use_max_strategy: String(maxStrategy),
+        max_slots: String(maxSlots),
+        max_stop_cap_pct: String(maxStopCap),
         t1_ratio: "0.40",
         t2_ratio: "0.70",
         t3_ratio: "1.00",
@@ -128,6 +166,10 @@ export default function BacktestWidget() {
   const parkStats = result?.park_stats || {};
   const coreStats = result?.core_stats || {};
   const crashStats = result?.crash_stats || {};
+  const maxChannel = channelMetrics.MAX || {};
+  const maxStats = result?.max_stats || {};
+  const scanDone = scanStatus?.status === "done";
+  const scanRunning = Boolean(scanStatus?.running_now);
   const chartData = (result?.equity_curve || []).map((point) => ({
     date: point.date,
     equity: point.equity,
@@ -197,6 +239,14 @@ export default function BacktestWidget() {
               <label style={labelStyle}><span>Trend max per settore</span><strong style={{ color: "#a78bfa" }}>{trendPerSector}</strong></label>
               <input type="range" min={1} max={6} step={1} value={trendPerSector} onChange={(event) => setTrendPerSector(Number(event.target.value))} disabled={!trendLeadership} style={{ ...sliderStyle, opacity: trendLeadership ? 1 : 0.35 }} />
             </div>
+            <div>
+              <label style={labelStyle}><span>Slot Max</span><strong style={{ color: "#f59e0b" }}>{maxSlots}</strong></label>
+              <input type="range" min={1} max={6} step={1} value={maxSlots} onChange={(event) => setMaxSlots(Number(event.target.value))} disabled={!maxStrategy} style={{ ...sliderStyle, opacity: maxStrategy ? 1 : 0.35 }} />
+            </div>
+            <div>
+              <label style={labelStyle}><span>Max stop massimo</span><strong style={{ color: "#f59e0b" }}>{maxStopCap}%</strong></label>
+              <input type="range" min={5} max={30} step={1} value={maxStopCap} onChange={(event) => setMaxStopCap(Number(event.target.value))} disabled={!maxStrategy} style={{ ...sliderStyle, opacity: maxStrategy ? 1 : 0.35 }} />
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
@@ -236,10 +286,29 @@ export default function BacktestWidget() {
               <input type="checkbox" checked={parkSpy} onChange={(event) => setParkSpy(event.target.checked)} />
               Liquidita' in SPY in regime BULL
             </label>
+            <label style={{ ...toggleStyle, color: "#f59e0b", fontWeight: 700, opacity: scanDone ? 1 : 0.5 }}>
+              <input type="checkbox" checked={maxStrategy} disabled={!scanDone && !maxStrategy} onChange={(event) => setMaxStrategy(event.target.checked)} />
+              Max Strategy point-in-time
+            </label>
             <label style={{ ...toggleStyle, color: "#94a3b8" }}>
               <input type="checkbox" checked={rotation} onChange={(event) => setRotation(event.target.checked)} />
               Rotazione settoriale, solo test informativo
             </label>
+          </div>
+          <div style={{ marginTop: 14, padding: 12, background: "#1c1917", border: "1px solid #78350f", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 11, color: "#fcd34d" }}>
+              <strong>Scansione storica Max:</strong>{" "}
+              {scanStatus ? `${scanStatus.status}${scanRunning ? " (in corso)" : ""}, ${scanStatus.tickers_done || 0}/${scanStatus.tickers_total || 0} ticker (${Number(scanStatus.progress_pct || 0).toFixed(1)}%), ${scanStatus.signals_in_db || 0} segnali` : "caricamento..."}
+              {!scanDone && <span style={{ color: "#a8a29e" }}> — il toggle Max si attiva a scansione completata</span>}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={loadScanStatus} style={{ background: "#292524", color: "#e7e5e4", fontSize: 11, borderRadius: 6, padding: "5px 10px", border: "1px solid #57534e", cursor: "pointer" }}>Aggiorna</button>
+              {scanRunning ? (
+                <button onClick={() => scanAction("stop")} disabled={scanBusy} style={{ background: "#7f1d1d", color: "white", fontSize: 11, borderRadius: 6, padding: "5px 10px", border: "none", cursor: "pointer" }}>Ferma</button>
+              ) : (
+                <button onClick={() => scanAction("start")} disabled={scanBusy} style={{ background: "#b45309", color: "white", fontSize: 11, borderRadius: 6, padding: "5px 10px", border: "none", cursor: "pointer" }}>{scanStatus?.status === "not_started" ? "Avvia scansione" : "Riprendi"}</button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -301,6 +370,16 @@ export default function BacktestWidget() {
               ["Core SPY P&L", `$${Number(coreStats.core_pnl_dollar || 0).toLocaleString()}`],
               ["Crash SPY P&L", `$${Number(crashStats.spy_pnl_dollar || 0).toLocaleString()}`],
               ["Crash deploy", crashStats.deploy_events || 0],
+              ["MAX posizioni", maxChannel.total_positions || 0],
+              ["MAX Win Rate", `${Number(maxChannel.win_rate || 0).toFixed(1)}%`],
+              ["MAX Profit Factor", Number(maxChannel.profit_factor || 0).toFixed(2)],
+              ["MAX P&L", `$${Number(maxChannel.pnl_dollar || 0).toLocaleString()}`],
+              ["MAX segnali caricati", maxStats.signals_loaded || 0],
+              ["MAX setup attivati", maxStats.setups_activated || 0],
+              ["MAX scaduti", maxStats.expired || 0],
+              ["MAX invalidati", maxStats.invalidated_before_entry || 0],
+              ["MAX sopra max entry", maxStats.skipped_above_max_entry || 0],
+              ["MAX senza slot", maxStats.no_slot || 0],
               ["Universo con barre", `${dataCoverage.universe_with_bars || 0}/${dataCoverage.universe_assets || 0}`],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "#111827", borderRadius: 7, padding: 9, border: "1px solid #1e293b" }}>
@@ -314,7 +393,7 @@ export default function BacktestWidget() {
             Periodo richiesto {dataCoverage.requested_days || days}, eseguito {dataCoverage.executed_days || 0}; copertura {dataCoverage.tickers_complete || 0}/{dataCoverage.tickers_total || 0} ticker; barre min/mediana/max {dataCoverage.bars_min || 0}/{dataCoverage.bars_median || 0}/{dataCoverage.bars_max || 0}.
           </div>
           <div style={{ marginTop: 12, padding: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8" }}>
-            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}, Trend {config.use_trend_leadership ? `ON (${config.trend_slots} slot)` : "OFF"}, parcheggio SPY {config.park_cash_in_spy ? "ON" : "OFF"}, core SPY {config.core_spy_pct || 0}%{config.use_trend_leadership ? `, trend max/settore ${config.trend_max_per_sector}` : ""}.
+            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}, Trend {config.use_trend_leadership ? `ON (${config.trend_slots} slot)` : "OFF"}, parcheggio SPY {config.park_cash_in_spy ? "ON" : "OFF"}, core SPY {config.core_spy_pct || 0}%, Max {config.use_max_strategy ? `ON (${config.max_slots} slot, stop max ${config.max_stop_cap_pct}%)` : "OFF"}{config.use_trend_leadership ? `, trend max/settore ${config.trend_max_per_sector}` : ""}.
           </div>
 
           {(result.validation_notes || []).map((note) => (
