@@ -26,6 +26,10 @@ export default function BacktestWidget() {
   const [maxStrategy, setMaxStrategy] = useState(false);
   const [maxSlots, setMaxSlots] = useState(3);
   const [maxStopCap, setMaxStopCap] = useState(15);
+  const [maxCycleFilter, setMaxCycleFilter] = useState(false);
+  const [maxUpperPos, setMaxUpperPos] = useState(60);
+  const [maxRoundingExemption, setMaxRoundingExemption] = useState(false);
+  const [maxHeadroom, setMaxHeadroom] = useState(0);
   const [scanStatus, setScanStatus] = useState(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [jobStatus, setJobStatus] = useState(null);
@@ -116,6 +120,11 @@ export default function BacktestWidget() {
         use_max_strategy: String(maxStrategy),
         max_slots: String(maxSlots),
         max_stop_cap_pct: String(maxStopCap),
+        max_cycle_filter: String(maxCycleFilter),
+        max_upper_position_pct: String(maxUpperPos),
+        max_upper_prior_advance_pct: "100",
+        max_allow_rounding_exemption: String(maxRoundingExemption),
+        max_min_headroom_atr: String(maxHeadroom),
         t1_ratio: "0.40",
         t2_ratio: "0.70",
         t3_ratio: "1.00",
@@ -247,6 +256,14 @@ export default function BacktestWidget() {
               <label style={labelStyle}><span>Max stop massimo</span><strong style={{ color: "#f59e0b" }}>{maxStopCap}%</strong></label>
               <input type="range" min={5} max={30} step={1} value={maxStopCap} onChange={(event) => setMaxStopCap(Number(event.target.value))} disabled={!maxStrategy} style={{ ...sliderStyle, opacity: maxStrategy ? 1 : 0.35 }} />
             </div>
+            <div>
+              <label style={labelStyle}><span>Max blocco ciclo sopra</span><strong style={{ color: "#f59e0b" }}>{maxUpperPos}%</strong></label>
+              <input type="range" min={40} max={90} step={5} value={maxUpperPos} onChange={(event) => setMaxUpperPos(Number(event.target.value))} disabled={!maxStrategy || !maxCycleFilter} style={{ ...sliderStyle, opacity: maxStrategy && maxCycleFilter ? 1 : 0.35 }} />
+            </div>
+            <div>
+              <label style={labelStyle}><span>Max spazio min. volume (ATR)</span><strong style={{ color: "#f59e0b" }}>{maxHeadroom}</strong></label>
+              <input type="range" min={0} max={4} step={0.5} value={maxHeadroom} onChange={(event) => setMaxHeadroom(Number(event.target.value))} disabled={!maxStrategy} style={{ ...sliderStyle, opacity: maxStrategy ? 1 : 0.35 }} />
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
@@ -289,6 +306,14 @@ export default function BacktestWidget() {
             <label style={{ ...toggleStyle, color: "#f59e0b", fontWeight: 700, opacity: scanDone ? 1 : 0.5 }}>
               <input type="checkbox" checked={maxStrategy} disabled={!scanDone && !maxStrategy} onChange={(event) => setMaxStrategy(event.target.checked)} />
               Max Strategy point-in-time
+            </label>
+            <label style={{ ...toggleStyle, color: "#f59e0b", opacity: maxStrategy ? 1 : 0.4 }}>
+              <input type="checkbox" checked={maxCycleFilter} disabled={!maxStrategy} onChange={(event) => setMaxCycleFilter(event.target.checked)} />
+              Max filtro ciclo alto
+            </label>
+            <label style={{ ...toggleStyle, color: "#f59e0b", opacity: maxStrategy ? 1 : 0.4 }}>
+              <input type="checkbox" checked={maxRoundingExemption} disabled={!maxStrategy} onChange={(event) => setMaxRoundingExemption(event.target.checked)} />
+              Max eccezione basi rounding (PFE)
             </label>
             <label style={{ ...toggleStyle, color: "#94a3b8" }}>
               <input type="checkbox" checked={rotation} onChange={(event) => setRotation(event.target.checked)} />
@@ -380,6 +405,10 @@ export default function BacktestWidget() {
               ["MAX invalidati", maxStats.invalidated_before_entry || 0],
               ["MAX sopra max entry", maxStats.skipped_above_max_entry || 0],
               ["MAX senza slot", maxStats.no_slot || 0],
+              ["MAX bloccati ciclo", maxStats.filters?.cycle_blocked || 0],
+              ["MAX eccezioni rounding", maxStats.filters?.exemption_kept || 0],
+              ["MAX eccezioni escluse", maxStats.filters?.exemption_removed || 0],
+              ["MAX bloccati volume", maxStats.filters?.headroom_blocked || 0],
               ["Universo con barre", `${dataCoverage.universe_with_bars || 0}/${dataCoverage.universe_assets || 0}`],
             ].map(([label, value]) => (
               <div key={label} style={{ background: "#111827", borderRadius: 7, padding: 9, border: "1px solid #1e293b" }}>
@@ -393,7 +422,7 @@ export default function BacktestWidget() {
             Periodo richiesto {dataCoverage.requested_days || days}, eseguito {dataCoverage.executed_days || 0}; copertura {dataCoverage.tickers_complete || 0}/{dataCoverage.tickers_total || 0} ticker; barre min/mediana/max {dataCoverage.bars_min || 0}/{dataCoverage.bars_median || 0}/{dataCoverage.bars_max || 0}.
           </div>
           <div style={{ marginTop: 12, padding: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8" }}>
-            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}, Trend {config.use_trend_leadership ? `ON (${config.trend_slots} slot)` : "OFF"}, parcheggio SPY {config.park_cash_in_spy ? "ON" : "OFF"}, core SPY {config.core_spy_pct || 0}%, Max {config.use_max_strategy ? `ON (${config.max_slots} slot, stop max ${config.max_stop_cap_pct}%)` : "OFF"}{config.use_trend_leadership ? `, trend max/settore ${config.trend_max_per_sector}` : ""}.
+            Configurazione eseguita: conf {config.min_confluence}, size {config.position_size_pct}%, max {config.max_positions}, APM {config.use_apm ? "ON" : "OFF"}, T1/T2/T3 {config.t1_size_pct}/{config.t2_size_pct}/{config.t3_size_pct}, floor {config.floor_t1_pct}/{config.floor_t2_pct}/{config.floor_t3_pct}, Sector Intelligence {config.use_sector_intelligence ? "ON" : "OFF"}, rotation {config.use_rotation ? "ON" : "OFF"}, crash {config.use_crash_deploy ? "ON" : "OFF"}, DPS+Kelly {config.use_dynamic_sizing ? "ON" : "OFF"}, APM Exit Proxy {config.use_apm_exit_proxy ? "ON" : "OFF"}, Trend {config.use_trend_leadership ? `ON (${config.trend_slots} slot)` : "OFF"}, parcheggio SPY {config.park_cash_in_spy ? "ON" : "OFF"}, core SPY {config.core_spy_pct || 0}%, Max {config.use_max_strategy ? `ON (${config.max_slots} slot, stop max ${config.max_stop_cap_pct}%, ciclo ${config.max_cycle_filter ? `ON >${config.max_upper_position_pct}%` : "OFF"}, rounding ${config.max_allow_rounding_exemption ? "ON" : "OFF"}, volume ${config.max_min_headroom_atr || 0} ATR)` : "OFF"}{config.use_trend_leadership ? `, trend max/settore ${config.trend_max_per_sector}` : ""}.
           </div>
 
           {(result.validation_notes || []).map((note) => (
