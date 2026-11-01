@@ -64,6 +64,16 @@ export const fetchMaxStrategyRiskShadow = () => get('/api/data/max-strategy-risk
 export const fetchMaxStrategyValidation = (limit = 100) => get(`/api/data/max-strategy-validation?limit=${limit}`);
 export const fetchMarketContext = () => get('/api/data/market-context');
 
+// Learning Machine
+export const runLearnAll = (force = false) =>
+  post(`/api/agents/learn${force ? '?force=true' : ''}`);
+export const fetchAgentParams = (name) => get(`/api/agents/${name}/params`);
+export const fetchAgentParamHistory = (name, limit = 12) =>
+  get(`/api/agents/${name}/param-history?limit=${limit}`);
+export const fetchAgentPerformance = (name, limit = 8) =>
+  get(`/api/agents/${name}/performance?limit=${limit}`);
+export const runProfessionalReport = () => post('/api/agents/professional-report');
+
 export const fetchSettings = () => get('/api/settings');
 export const saveSettings = (settings) => post('/api/settings', settings);
 export const fetchMlPredictions = () => get('/api/ml/predict/all');
