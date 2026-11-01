@@ -4,6 +4,7 @@ import {
   fetchMarketContext,
   fetchMaxStrategyShadow,
   fetchMaxStrategyValidation,
+  fetchAgentParams,
 } from '../utils/api';
 
 const C = {
@@ -156,20 +157,32 @@ export default function Dashboard({
   const [ctx, setCtx] = useState(null);
   const [maxShadow, setMaxShadow] = useState(null);
   const [validation, setValidation] = useState(null);
+  const [learnStrip, setLearnStrip] = useState(null);
 
   useEffect(() => {
     let alive = true;
 
     async function load() {
-      const [context, shadow, valid] = await Promise.all([
+      const [context, shadow, valid, aParams, pParams] = await Promise.all([
         fetchMarketContext(),
         fetchMaxStrategyShadow(),
         fetchMaxStrategyValidation(200),
+        fetchAgentParams('alpha_strategist'),
+        fetchAgentParams('adaptive_position_manager'),
       ]);
       if (!alive) return;
       if (context && context.available) setCtx(context);
       setMaxShadow(shadow);
       setValidation(valid);
+      const ap = aParams?.params || aParams || {};
+      const pp = pParams?.params || pParams || {};
+      setLearnStrip({
+        minConf: ap.min_confluence,
+        maxRsi: ap.max_rsi_entry,
+        exitConf: pp.apm_exit_confluence_threshold,
+        alphaVer: ap.param_version,
+        apmVer: pp.param_version,
+      });
     }
 
     load();
@@ -225,14 +238,12 @@ export default function Dashboard({
   const alphaCounts = maxShadow?.action_counts || {};
   const volColor = volatility === 'EXTREME' ? C.red : volatility === 'HIGH' ? C.orange : C.green;
 
-  // PnL snapshot posizioni aperte
   const openPnl = Array.isArray(positions)
     ? positions.reduce((sum, p) => sum + Number(p.unrealized_pl || 0), 0)
     : 0;
 
   return (
     <div style={{ color: C.text, paddingBottom: 40 }}>
-      {/* ========== 1. STANCE / HERO ========== */}
       <Card
         style={{
           marginBottom: 14,
@@ -281,28 +292,13 @@ export default function Dashboard({
             gap: 10,
           }}
         >
-          <Metric
-            label="Esposizione"
-            value={`${Math.round(exposure * 100)}%`}
-            color={C.green}
-            sub={exposureMeaning(exposure)}
-          />
-          <Metric
-            label="Confidenza"
-            value={confidence.toFixed(0)}
-            color={confidence >= 60 ? C.green : confidence >= 45 ? C.amber : C.red}
-            sub="regime"
-          />
-          <Metric
-            label="Partecipazione"
-            value={`${breadth.toFixed(0)}%`}
-            color={breadth >= 50 ? C.green : breadth >= 35 ? C.amber : C.red}
-            sub="sopra EMA50"
-          />
+          <Metric label="Esposizione" value={`${Math.round(exposure * 100)}%`} color={C.green} sub={exposureMeaning(exposure)} />
+          <Metric label="Confidenza" value={confidence.toFixed(0)} color={confidence >= 60 ? C.green : confidence >= 45 ? C.amber : C.red} sub="regime" />
+          <Metric label="Partecipazione" value={`${breadth.toFixed(0)}%`} color={breadth >= 50 ? C.green : breadth >= 35 ? C.amber : C.red} sub="sopra EMA50" />
           <Metric label="Volatilità" value={volatility} color={volColor} sub="da VIXY / radar" />
           <Metric
             label="Leadership"
-            value={typeof leadershipLabel === 'string' ? leadershipLabel.replace(/_/g, ' ').slice(0, 18) : 'N/D'}
+            value={typeof leadershipLabel === 'string' ? leadershipLabel.replace(/_/g, ' ').slice(0, 22) : 'N/D'}
             color={C.blue}
             sub={focusSectors.slice(0, 3).join(' · ') || '—'}
           />
@@ -312,17 +308,13 @@ export default function Dashboard({
           <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 10, color: C.muted }}>Focus</span>
             {focusSectors.map((s) => (
-              <Pill key={`f-${s}`} color={C.green}>
-                {s}
-              </Pill>
+              <Pill key={`f-${s}`} color={C.green}>{s}</Pill>
             ))}
             {avoidSectors.length > 0 && (
               <>
                 <span style={{ fontSize: 10, color: C.muted, marginLeft: 6 }}>Evita</span>
                 {avoidSectors.map((s) => (
-                  <Pill key={`a-${s}`} color={C.red}>
-                    {s}
-                  </Pill>
+                  <Pill key={`a-${s}`} color={C.red}>{s}</Pill>
                 ))}
               </>
             )}
@@ -330,7 +322,34 @@ export default function Dashboard({
         )}
       </Card>
 
-      {/* ========== 2. DESK BRIEF ========== */}
+      {learnStrip && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: '10px 14px',
+            borderRadius: 12,
+            border: `1px solid ${C.border}`,
+            background: 'rgba(139,92,246,.06)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 10,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            cursor: onGoToAgents ? 'pointer' : 'default',
+          }}
+          onClick={onGoToAgents}
+        >
+          <div style={{ fontSize: 11, color: C.dim }}>
+            <span style={{ color: C.purple, fontWeight: 800, marginRight: 8 }}>LEARNING</span>
+            Alpha min_conf <strong style={{ color: C.text }}>{learnStrip.minConf ?? '—'}</strong>
+            {' · '}max RSI <strong style={{ color: C.text }}>{learnStrip.maxRsi ?? '—'}</strong>
+            {' · '}APM exit <strong style={{ color: C.text }}>{learnStrip.exitConf ?? '—'}</strong>
+            {' · '}v{learnStrip.alphaVer ?? '—'}/{learnStrip.apmVer ?? '—'}
+          </div>
+          <div style={{ fontSize: 10, color: C.muted }}>Apri Agenti →</div>
+        </div>
+      )}
+
       {reportText ? (
         <Card
           style={{
@@ -340,15 +359,7 @@ export default function Dashboard({
           }}
         >
           <Header eyebrow="Desk Brief" title="Analisi di mercato" right={reportSource} />
-          <div
-            style={{
-              fontSize: 13.5,
-              color: '#e2e8f0',
-              lineHeight: 1.85,
-              whiteSpace: 'pre-wrap',
-              fontWeight: 450,
-            }}
-          >
+          <div style={{ fontSize: 13.5, color: '#e2e8f0', lineHeight: 1.85, whiteSpace: 'pre-wrap', fontWeight: 450 }}>
             {reportText}
           </div>
         </Card>
@@ -356,88 +367,37 @@ export default function Dashboard({
         <Card style={{ marginBottom: 14, borderLeft: `3px solid ${C.muted}` }}>
           <Header eyebrow="Desk Brief" title="Analisi di mercato" right="IN ATTESA" />
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-            Il brief professionale viene generato a fine pipeline. Se non compare, la quota LLM può essere esaurita:
-            in quel caso resta disponibile la lettura macro al prossimo run.
+            Il brief professionale viene generato a fine pipeline. Se non compare, la quota LLM può essere esaurita.
           </div>
         </Card>
       )}
 
-      {/* ========== 3. PORTAFOGLIO + AZIONI ========== */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: 14,
-          marginBottom: 14,
-        }}
-      >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 14 }}>
         <Card onClick={onGoToAlpaca}>
           <Header eyebrow="Portafoglio" title="Posizioni aperte" right="APRI ALPACA →" />
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
             <Metric label="Equity" value={money(equity)} color={C.text} />
             <Metric label="Cash" value={money(cash)} color={C.dim} />
-            <Metric
-              label="PnL aperto"
-              value={`${openPnl >= 0 ? '+' : ''}${money(openPnl)}`}
-              color={openPnl >= 0 ? C.green : C.red}
-              sub={`${positionsCount} pos`}
-            />
+            <Metric label="PnL aperto" value={`${openPnl >= 0 ? '+' : ''}${money(openPnl)}`} color={openPnl >= 0 ? C.green : C.red} sub={`${positionsCount} pos`} />
           </div>
-
           {Array.isArray(positions) && positions.length > 0 ? (
             <div style={{ display: 'grid', gap: 6 }}>
               {positions.slice(0, 6).map((p) => {
                 const pnlPct = Number(p.unrealized_plpc || 0) * 100;
                 const sym = p.symbol || p.ticker;
                 return (
-                  <div
-                    key={sym}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '64px 1fr 72px',
-                      gap: 8,
-                      alignItems: 'center',
-                      padding: '8px 10px',
-                      background: C.panel2,
-                      border: `1px solid ${C.border2}`,
-                      borderRadius: 8,
-                    }}
-                  >
+                  <div key={sym} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 72px', gap: 8, alignItems: 'center', padding: '8px 10px', background: C.panel2, border: `1px solid ${C.border2}`, borderRadius: 8 }}>
                     <div style={{ fontWeight: 800, fontSize: 12 }}>{sym}</div>
-                    <div style={{ fontSize: 10, color: C.dim }}>
-                      {money(p.market_value)} · {Number(p.qty || p.shares || 0).toFixed(2)} sh
-                    </div>
-                    <div
-                      style={{
-                        textAlign: 'right',
-                        fontWeight: 800,
-                        fontSize: 12,
-                        color: pnlPct >= 0 ? C.green : C.red,
-                      }}
-                    >
-                      {pnlPct >= 0 ? '+' : ''}
-                      {pnlPct.toFixed(1)}%
+                    <div style={{ fontSize: 10, color: C.dim }}>{money(p.market_value)} · {Number(p.qty || p.shares || 0).toFixed(2)} sh</div>
+                    <div style={{ textAlign: 'right', fontWeight: 800, fontSize: 12, color: pnlPct >= 0 ? C.green : C.red }}>
+                      {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                     </div>
                   </div>
                 );
               })}
-              {positions.length > 6 && (
-                <div style={{ fontSize: 10, color: C.muted, textAlign: 'center', marginTop: 4 }}>
-                  +{positions.length - 6} altre posizioni
-                </div>
-              )}
             </div>
           ) : (
-            <div style={{ padding: 18, textAlign: 'center', color: '#475569', fontSize: 12 }}>
-              Nessuna posizione aperta.
-            </div>
+            <div style={{ padding: 18, textAlign: 'center', color: '#475569', fontSize: 12 }}>Nessuna posizione aperta.</div>
           )}
         </Card>
 
@@ -450,64 +410,25 @@ export default function Dashboard({
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
               {lastActions.slice(0, 8).map((a, i) => (
-                <div
-                  key={`${a.ticker}-${i}`}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '9px 10px',
-                    background: C.panel2,
-                    border: `1px solid ${C.border2}`,
-                    borderRadius: 8,
-                  }}
-                >
-                  <Pill color={a.action === 'BUY' ? C.green : a.action === 'SELL' ? C.red : C.amber}>
-                    {a.action}
-                  </Pill>
+                <div key={`${a.ticker}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 10px', background: C.panel2, border: `1px solid ${C.border2}`, borderRadius: 8 }}>
+                  <Pill color={a.action === 'BUY' ? C.green : a.action === 'SELL' ? C.red : C.amber}>{a.action}</Pill>
                   <div style={{ fontSize: 12, fontWeight: 800 }}>{a.ticker}</div>
                   <div style={{ color: C.muted, fontSize: 10 }}>
-                    {a.pnl_pct != null
-                      ? `${Number(a.pnl_pct) >= 0 ? '+' : ''}${Number(a.pnl_pct).toFixed(1)}%`
-                      : a.shares
-                        ? `${Number(a.shares).toFixed(2)} sh`
-                        : '—'}
+                    {a.pnl_pct != null ? `${Number(a.pnl_pct) >= 0 ? '+' : ''}${Number(a.pnl_pct).toFixed(1)}%` : a.shares ? `${Number(a.shares).toFixed(2)} sh` : '—'}
                   </div>
                 </div>
               ))}
             </div>
           )}
-
-          {Object.keys(alphaCounts).length > 0 && (
-            <div style={{ marginTop: 12, fontSize: 10, color: C.muted }}>
-              Max shadow:{' '}
-              {Object.entries(alphaCounts)
-                .map(([k, v]) => `${k} ${v}`)
-                .join(' · ')}
-            </div>
-          )}
         </Card>
       </div>
 
-      {/* ========== 4. CANDIDATI / SCANNER ========== */}
       <Card style={{ marginBottom: 14 }}>
-        <Header
-          eyebrow="Scanner"
-          title="Setup da osservare"
-          right={topSetups.length ? `${topSetups.length} titoli` : '—'}
-        />
+        <Header eyebrow="Scanner" title="Setup da osservare" right={topSetups.length ? `${topSetups.length} titoli` : '—'} />
         {topSetups.length === 0 ? (
-          <div style={{ padding: 18, textAlign: 'center', color: '#475569', fontSize: 12 }}>
-            Nessun setup in evidenza al momento.
-          </div>
+          <div style={{ padding: 18, textAlign: 'center', color: '#475569', fontSize: 12 }}>Nessun setup in evidenza.</div>
         ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-              gap: 8,
-            }}
-          >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
             {topSetups.map((a) => {
               const ticker = a.ticker;
               const score = Number(a.setup_score || 0);
@@ -515,84 +436,38 @@ export default function Dashboard({
               const price = livePrices?.[ticker]?.price ?? a.price;
               const inFocus = focusSectors.includes(a.sector_code || a.sector);
               return (
-                <div
-                  key={ticker}
-                  onClick={() => onLoadFullStock && onLoadFullStock(ticker)}
-                  style={{
-                    padding: 11,
-                    background: C.panel2,
-                    border: `1px solid ${C.border2}`,
-                    borderLeft: `3px solid ${inFocus ? C.green : 'transparent'}`,
-                    borderRadius: 10,
-                    cursor: onLoadFullStock ? 'pointer' : 'default',
-                  }}
-                >
+                <div key={ticker} onClick={() => onLoadFullStock && onLoadFullStock(ticker)} style={{ padding: 11, background: C.panel2, border: `1px solid ${C.border2}`, borderLeft: `3px solid ${inFocus ? C.green : 'transparent'}`, borderRadius: 10, cursor: onLoadFullStock ? 'pointer' : 'default' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: 800, fontSize: 13 }}>{ticker}</div>
                     <div style={{ fontSize: 14, fontWeight: 900, color: getScoreColor(score) }}>{score}</div>
                   </div>
                   <div style={{ marginTop: 4, fontSize: 10, color: C.dim }}>
-                    {getSetupBadge?.(a.setup_type) || a.setup_type || 'setup'} ·{' '}
-                    <span style={{ color: change >= 0 ? C.green : C.red }}>
-                      {change >= 0 ? '+' : ''}
-                      {change.toFixed(1)}%
-                    </span>
+                    {a.setup_type || 'setup'} · <span style={{ color: change >= 0 ? C.green : C.red }}>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</span>
                   </div>
                   <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>
-                    RSI {a.rsi != null ? Number(a.rsi).toFixed(0) : '—'} · $
-                    {Number(price || 0).toLocaleString('it-IT', { maximumFractionDigits: 2 })}
+                    RSI {a.rsi != null ? Number(a.rsi).toFixed(0) : '—'} · ${Number(price || 0).toLocaleString('it-IT', { maximumFractionDigits: 2 })}
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-        <div style={{ marginTop: 10, fontSize: 10, color: C.muted, lineHeight: 1.5 }}>
-          Punteggio tecnico dello scanner (non la confluence finale di ingresso). Bordo verde = settore in focus.
-        </div>
       </Card>
 
-      {/* ========== 5. SETTORI COMPATTI ========== */}
       {ctx && Array.isArray(ctx.sectors) && ctx.sectors.length > 0 && (
         <Card>
-          <Header
-            eyebrow="Flusso di capitale"
-            title="Settori"
-            right={ctx.intraday_available ? 'INTRADAY ON' : 'BARRE CHIUSE'}
-          />
+          <Header eyebrow="Flusso di capitale" title="Settori" right={ctx.intraday_available ? 'INTRADAY ON' : 'BARRE CHIUSE'} />
           <div style={{ display: 'grid', gap: 5 }}>
             {ctx.sectors.slice(0, 8).map((s) => {
               const inFocus = focusSectors.includes(s.sector);
               const inAvoid = avoidSectors.includes(s.sector);
               const edge = inFocus ? C.green : inAvoid ? C.red : 'transparent';
               return (
-                <div
-                  key={s.sector}
-                  onClick={() => onGoToSector && onGoToSector(s.sector)}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '52px 1fr 64px 64px',
-                    gap: 8,
-                    alignItems: 'center',
-                    padding: '7px 9px',
-                    borderRadius: 8,
-                    cursor: onGoToSector ? 'pointer' : 'default',
-                    background: inFocus
-                      ? 'rgba(34,197,94,.05)'
-                      : inAvoid
-                        ? 'rgba(239,68,68,.04)'
-                        : C.panel2,
-                    border: `1px solid ${C.border2}`,
-                    borderLeft: `3px solid ${edge}`,
-                  }}
-                >
+                <div key={s.sector} onClick={() => onGoToSector && onGoToSector(s.sector)} style={{ display: 'grid', gridTemplateColumns: '52px 1fr 64px 64px', gap: 8, alignItems: 'center', padding: '7px 9px', borderRadius: 8, cursor: onGoToSector ? 'pointer' : 'default', background: inFocus ? 'rgba(34,197,94,.05)' : inAvoid ? 'rgba(239,68,68,.04)' : C.panel2, border: `1px solid ${C.border2}`, borderLeft: `3px solid ${edge}` }}>
                   <div style={{ fontSize: 11, fontWeight: 800 }}>{s.sector}</div>
-                  <div style={{ fontSize: 10, color: C.dim }}>
-                    {inFocus ? 'FOCUS' : inAvoid ? 'EVITA' : s.status || '—'}
-                  </div>
+                  <div style={{ fontSize: 10, color: C.dim }}>{inFocus ? 'FOCUS' : inAvoid ? 'EVITA' : s.status || '—'}</div>
                   <div style={{ textAlign: 'right', fontSize: 11, fontWeight: 700, color: Number(s.rs_swing) >= 0 ? C.green : C.red }}>
-                    {Number(s.rs_swing) >= 0 ? '+' : ''}
-                    {Number(s.rs_swing || 0).toFixed(1)}%
+                    {Number(s.rs_swing) >= 0 ? '+' : ''}{Number(s.rs_swing || 0).toFixed(1)}%
                   </div>
                   <div style={{ textAlign: 'right', fontSize: 10, color: C.muted }}>20g</div>
                 </div>
