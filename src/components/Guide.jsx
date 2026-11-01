@@ -32,6 +32,7 @@ const BADGES = {
   OFF: '#64748b',
   BACKTEST: '#a78bfa',
   SHADOW: '#f59e0b',
+  NEW: '#38bdf8',
 };
 
 function Badge({ kind }) {
@@ -66,17 +67,20 @@ export default function Guide() {
   return (
     <div>
       <div style={{ background: 'linear-gradient(135deg,#1e1b4b,#0f172a)', border: '1px solid #4c1d95', borderRadius: 16, padding: 28, marginBottom: 18 }}>
-        <div style={{ color: '#a78bfa', fontWeight: 900, fontSize: 11 }}>SWINGLAB V3 · GUIDA OPERATIVA</div>
-        <h1 style={{ margin: '8px 0 12px' }}>Un portafoglio attivo a più canali, per battere SPY</h1>
+        <div style={{ color: '#a78bfa', fontWeight: 900, fontSize: 11 }}>SWINGLAB V4 · GUIDA OPERATIVA</div>
+        <h1 style={{ margin: '8px 0 12px' }}>Un portafoglio attivo a più canali, che impara dai risultati</h1>
         <p style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.7 }}>
           SwingLab analizza 300 titoli in 11 settori su Alpaca paper. Ogni canale lavora in una fase diversa del mercato:
           Alpha nei pullback, Max Strategy nei bottom, Trend Leadership nei rialzi, Crash Deploy nei crolli.
+          Il <strong>Learning Machine</strong> aggiorna le soglie in base agli outcome reali; sulla Dashboard trovi un unico
+          <strong> Desk Brief</strong> professionale generato a fine pipeline.
           Tutti i comandi dei canali si trovano in <strong>Settings → Canali di trading</strong>.
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
           <Badge kind="LIVE" /><span style={{ color: '#94a3b8', fontSize: 11 }}>compra davvero (paper)</span>
           <Badge kind="SHADOW" /><span style={{ color: '#94a3b8', fontSize: 11 }}>osserva, non compra</span>
           <Badge kind="BACKTEST" /><span style={{ color: '#94a3b8', fontSize: 11 }}>validato solo nel backtest</span>
+          <Badge kind="NEW" /><span style={{ color: '#94a3b8', fontSize: 11 }}>Learning Machine + Desk Brief</span>
           <Badge kind="OFF" /><span style={{ color: '#94a3b8', fontSize: 11 }}>spento perché peggiora i risultati</span>
         </div>
       </div>
@@ -86,16 +90,17 @@ export default function Guide() {
           <li><strong>Dati</strong>: cron-job.org avvia la pipeline Stocks. Un lock impedisce due pipeline contemporanee.</li>
           <li><strong>Analisi</strong>: per ogni titolo indicatori, struttura e Max Strategy, salvati pronti in MongoDB.</li>
           <li><strong>MacroAnalyst</strong>: regime (BULL … CRASH), leadership RSP/QQQ/IWM, settori focus ed esposizione.</li>
-          <li><strong>AlphaStrategist</strong>: candidati Alpha e, se attivo, candidati Max.</li>
+          <li><strong>AlphaStrategist</strong>: candidati Alpha e, se attivo, candidati Max / Trend.</li>
           <li><strong>RiskManager</strong>: limiti di perdita, slot per canale, settori, R/R, size con DPS × Kelly × regime.</li>
           <li><strong>APM</strong>: gestione posizioni con scale-out 30/30/25 e floor 0/+3/+8%.</li>
           <li><strong>Executor</strong>: ordini notional, stop e target software, registro trade con il canale di origine.</li>
+          <li><strong>Desk Brief</strong>: a fine pipeline viene generato un unico report LLM professionale (salvato nel SharedBrain).</li>
         </ol>
       </Section>
 
       <Section title="2 · I canali" color="#22c55e">
         <Cards items={[
-          { title: 'Alpha', badge: 'LIVE', color: '#3b82f6', text: 'Pullback e rimbalzi su titoli sani. Confluence a 17 fattori, soglia per settore. Usa gli slot non riservati.' },
+          { title: 'Alpha', badge: 'LIVE', color: '#3b82f6', text: 'Pullback e rimbalzi su titoli sani. Confluence multi-fattore, soglia per settore. Usa gli slot non riservati.' },
           { title: 'Max Strategy', badge: 'LIVE', color: '#f59e0b', text: 'Bottom e riaccumuli. 4 slot riservati, stop massimo 8% sotto l’ingresso, R/R minimo 1,0. Interruttore in Settings.' },
           { title: 'Crash Deploy', badge: 'LIVE', color: '#ef4444', text: 'Compra SPY a fette nei crolli (regime BEAR/CRASH, drawdown −8%). Interruttore e modalità in Settings.' },
           { title: 'Trend Leadership', badge: 'BACKTEST', color: '#a78bfa', text: 'Leader vicini ai massimi e più forti di SPY. 4 slot, uscita sotto EMA50. Prossimo canale da attivare.' },
@@ -111,7 +116,50 @@ export default function Guide() {
         </div>
       </Section>
 
-      <Section title="3 · Max Strategy v1.5.2" color="#f59e0b">
+      <Section title="3 · Learning Machine v3" color="#38bdf8">
+        <p style={{ marginTop: 0 }}>
+          Il punto di forza del sistema: gli agenti <strong>imparano dai risultati reali</strong> e aggiornano i parametri
+          in modo controllato (max 25% di variazione per ciclo) con storico versionato.
+        </p>
+        <Cards items={[
+          {
+            title: 'Alpha learn',
+            badge: 'NEW',
+            color: '#3b82f6',
+            text: 'Aggrega per posizione (niente bias scale-out). Aggiorna min_confluence, max_rsi_entry, best/worst setups e settori deboli.',
+          },
+          {
+            title: 'APM learn',
+            badge: 'NEW',
+            color: '#22c55e',
+            text: 'Guarda il prezzo a +5 giorni dopo ogni EXIT. Se esce troppo presto alza le soglie; se esce bene può allentarle.',
+          },
+          {
+            title: 'Param history',
+            badge: 'NEW',
+            color: '#a78bfa',
+            text: 'Ogni set di parametri viene salvato. Endpoint /api/agents/{agente}/param-history per audit e rollback.',
+          },
+        ]} />
+        <p style={{ marginBottom: 0, marginTop: 12 }}>
+          Il learning si lancia con <code>POST /api/agents/learn</code> (o cron dedicato). Arriva un report Telegram
+          riepilogativo. Non cambia la logica di ingresso: regola solo le soglie nel tempo.
+        </p>
+      </Section>
+
+      <Section title="4 · Desk Brief (Dashboard)" color="#8b5cf6">
+        <p style={{ marginTop: 0 }}>
+          Sulla Dashboard principale c’è una sola card <strong>Analisi di Mercato</strong>:
+          un testo continuo stile portfolio manager (regime, leadership, focus/avoid, stance operativa).
+        </p>
+        <ul style={{ margin: '0 0 0 18px' }}>
+          <li>Generato automaticamente a fine pipeline e salvato nel SharedBrain.</li>
+          <li>Si può forzare con <code>POST /api/agents/professional-report</code>.</li>
+          <li>Se l’LLM non risponde, la card mostra la lettura macro classica come fallback.</li>
+        </ul>
+      </Section>
+
+      <Section title="5 · Max Strategy v1.5.2" color="#f59e0b">
         <p style={{ marginTop: 0 }}>Max non compra ciò che è semplicemente sceso: cerca arresto del ribasso, accumulazione e conferma.</p>
         <Cards items={[
           { title: 'Weekly', color: '#8b5cf6', text: 'POC maestro, rounding, neck, trendline discendente e fase del ciclo. Qualifica il piano.' },
@@ -128,7 +176,7 @@ export default function Guide() {
         </p>
       </Section>
 
-      <Section title="4 · Risultati del backtest" color="#a78bfa">
+      <Section title="6 · Risultati del backtest" color="#a78bfa">
         <p style={{ marginTop: 0 }}>Configurazione: Core SPY 60% + Alpha + Trend (4 slot) + Max (4 slot, stop 8%) + Crash Deploy + DPS/Kelly.</p>
         <Table
           head={['Periodo', 'SwingLab', 'SPY', 'Alpha', 'Sharpe (SPY)', 'Max DD (SPY)']}
@@ -144,7 +192,7 @@ export default function Guide() {
         </p>
       </Section>
 
-      <Section title="5 · Backtest Lab" color="#8b5cf6">
+      <Section title="7 · Backtest Lab" color="#8b5cf6">
         <ul style={{ margin: 0, paddingLeft: 18 }}>
           <li>Gira in background: puoi cambiare pagina, il risultato resta disponibile. Un solo backtest alla volta.</li>
           <li><strong>Usa parametri live dal database</strong>: prende max posizioni, size e confluence reali. Tienilo sempre attivo.</li>
@@ -153,22 +201,25 @@ export default function Guide() {
         </ul>
       </Section>
 
-      <Section title="6 · Regole operative" color="#ef4444">
+      <Section title="8 · Regole operative" color="#ef4444">
         <ul style={{ margin: 0, paddingLeft: 18 }}>
-          <li>Non chiamare <code>/api/agents/learn</code>: il Learning Loop conta ancora le tranche come trade separati.</li>
-          <li>Non giudicare Max nelle prime 2-4 settimane e non cambiarne i parametri.</li>
+          <li>Il Learning Loop è <strong>abilitato e corretto</strong> (aggregazione per posizione). Puoi chiamare <code>/api/agents/learn</code>.</li>
+          <li>I parametri si muovono al massimo del 25% per ciclo: non aspettarti stravolgimenti da un solo run.</li>
+          <li>Non giudicare Max nelle prime 2-4 settimane e non cambiarne i parametri a caso.</li>
           <li>Accendi un canale alla volta e solo da Settings.</li>
           <li>La pagina Salute mostra lo stato del sistema e il Crash Risk; non contiene comandi.</li>
+          <li>Il Desk Brief dipende dai provider LLM: se la quota è esaurita resta la lettura macro di fallback.</li>
         </ul>
       </Section>
 
-      <Section title="7 · Roadmap" color="#f97316">
+      <Section title="9 · Roadmap" color="#f97316">
         <ol style={{ margin: 0, paddingLeft: 18 }}>
-          <li>Max live in osservazione.</li>
+          <li>Max live in osservazione continua.</li>
           <li>Trend Leadership live con interruttore.</li>
           <li>Core SPY 60% live.</li>
           <li>Confronto settimanale live / backtest / SPY.</li>
-          <li>Correzione del Learning Loop (per posizione).</li>
+          <li>Estendere il learning anche alle soglie di Max Strategy.</li>
+          <li>Dashboard parametri: grafico evoluzione min_confluence / soglie APM.</li>
           <li>GLD e SLV nell’universo, poi canale BTC con filtro TOTAL e dominance.</li>
         </ol>
       </Section>
