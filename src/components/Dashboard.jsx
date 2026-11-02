@@ -5,6 +5,7 @@ import {
   fetchMaxStrategyShadow,
   fetchMaxStrategyValidation,
   fetchAgentParams,
+  runProfessionalReport,
 } from '../utils/api';
 
 const C = {
@@ -158,6 +159,8 @@ export default function Dashboard({
   const [maxShadow, setMaxShadow] = useState(null);
   const [validation, setValidation] = useState(null);
   const [learnStrip, setLearnStrip] = useState(null);
+  const [briefBusy, setBriefBusy] = useState(false);
+  const [briefMsg, setBriefMsg] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -192,6 +195,33 @@ export default function Dashboard({
       clearInterval(timer);
     };
   }, []);
+
+  async function handleRegenerateBrief() {
+    setBriefBusy(true);
+    setBriefMsg(null);
+    try {
+      const res = await runProfessionalReport();
+      if (!res) {
+        setBriefMsg('Richiesta fallita o LLM non disponibile');
+      } else if (res.professional_report) {
+        setBriefMsg('Brief aggiornato');
+        const context = await fetchMarketContext();
+        if (context && context.available) setCtx(context);
+      } else if (res.status === 'skipped') {
+        setBriefMsg(res.message || 'LLM non disponibile');
+      } else if (res.status === 'error') {
+        setBriefMsg(res.error || 'Errore');
+      } else {
+        setBriefMsg('Risposta ricevuta');
+        const context = await fetchMarketContext();
+        if (context && context.available) setCtx(context);
+      }
+    } catch (e) {
+      setBriefMsg(String(e?.message || e));
+    } finally {
+      setBriefBusy(false);
+    }
+  }
 
   const ps = agentsStatus?.pipeline_state;
   const brain = agentsStatus?.shared_brain?.market || {};
@@ -350,27 +380,60 @@ export default function Dashboard({
         </div>
       )}
 
-      {reportText ? (
-        <Card
-          style={{
-            marginBottom: 14,
-            borderLeft: `3px solid ${C.purple}`,
-            background: 'linear-gradient(145deg, rgba(139,92,246,.08) 0%, #0b1220 55%)',
-          }}
-        >
-          <Header eyebrow="Desk Brief" title="Analisi di mercato" right={reportSource} />
+      <Card
+        style={{
+          marginBottom: 14,
+          borderLeft: `3px solid ${reportText ? C.purple : C.muted}`,
+          background: reportText
+            ? 'linear-gradient(145deg, rgba(139,92,246,.08) 0%, #0b1220 55%)'
+            : undefined,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 3 }}>
+              Desk Brief
+            </div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Analisi di mercato</h3>
+            <div style={{ fontSize: 9, color: '#475569', marginTop: 4 }}>
+              {reportSource || 'IN ATTESA'}
+            </div>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRegenerateBrief();
+            }}
+            disabled={briefBusy}
+            style={{
+              background: briefBusy ? C.panel2 : 'rgba(139,92,246,.18)',
+              color: C.text,
+              border: `1px solid ${C.purple}66`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              cursor: briefBusy ? 'wait' : 'pointer',
+              fontWeight: 700,
+              fontSize: 11,
+            }}
+          >
+            {briefBusy ? 'Genero…' : 'Rigenera brief'}
+          </button>
+        </div>
+
+        {briefMsg && (
+          <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>{briefMsg}</div>
+        )}
+
+        {reportText ? (
           <div style={{ fontSize: 13.5, color: '#e2e8f0', lineHeight: 1.85, whiteSpace: 'pre-wrap', fontWeight: 450 }}>
             {reportText}
           </div>
-        </Card>
-      ) : (
-        <Card style={{ marginBottom: 14, borderLeft: `3px solid ${C.muted}` }}>
-          <Header eyebrow="Desk Brief" title="Analisi di mercato" right="IN ATTESA" />
+        ) : (
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-            Il brief professionale viene generato a fine pipeline. Se non compare, la quota LLM può essere esaurita.
+            Nessun brief salvato. Premi «Rigenera brief» oppure aspetta il prossimo run della pipeline.
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 14 }}>
         <Card onClick={onGoToAlpaca}>
