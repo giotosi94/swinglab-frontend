@@ -73,6 +73,8 @@ export const fetchAgentParamHistory = (name, limit = 12) =>
 export const fetchAgentPerformance = (name, limit = 8) =>
   get(`/api/agents/${name}/performance?limit=${limit}`);
 export const runProfessionalReport = () => post('/api/agents/professional-report');
+export const fetchAgentGuardrail = (name) => get(`/api/agents/${name}/guardrail`);
+export const runAgentRollback = (name) => post(`/api/agents/${name}/rollback`);
 
 export const fetchSettings = () => get('/api/settings');
 export const saveSettings = (settings) => post('/api/settings', settings);
