@@ -11,6 +11,8 @@ import {
   runLearnAll,
   fetchAgentParams,
   fetchAgentParamHistory,
+  fetchAgentGuardrail,
+  runAgentRollback,
 } from '../utils/api';
 
 const COLORS = {
@@ -82,6 +84,8 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
   const [apmParams, setApmParams] = useState(null);
   const [alphaHistory, setAlphaHistory] = useState([]);
   const [apmHistoryParams, setApmHistoryParams] = useState([]);
+  const [alphaGuardrail, setAlphaGuardrail] = useState(null);
+  const [rollbackBusy, setRollbackBusy] = useState(false);
 
   const ps = agentsStatus?.pipeline_state;
   const agents = agentsStatus?.agents || {};
@@ -93,13 +97,14 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
 
   async function loadExtras() {
     setLoadingExtra(true);
-    const [status, summary, history, alphaShadow, riskSizing, validationData, aParams, pParams, aHist, pHist] = await Promise.all([
+    const [status, summary, history, alphaShadow, riskSizing, validationData, aParams, pParams, aHist, pHist, guard] = await Promise.all([
       fetchApmStatus(), fetchApmSummary(7), fetchApmHistory(8),
       fetchMaxStrategyShadow(), fetchMaxStrategyRiskShadow(), fetchMaxStrategyValidation(500),
       fetchAgentParams('alpha_strategist'),
       fetchAgentParams('adaptive_position_manager'),
       fetchAgentParamHistory('alpha_strategist', 6),
       fetchAgentParamHistory('adaptive_position_manager', 6),
+      fetchAgentGuardrail('alpha_strategist'),
     ]);
     setApm({ status, summary, history: history?.decisions || [] });
     setMaxShadow(alphaShadow);
@@ -109,6 +114,7 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
     setApmParams(pParams?.params || pParams || null);
     setAlphaHistory(aHist?.history || []);
     setApmHistoryParams(pHist?.history || []);
+    setAlphaGuardrail(guard);
     setLoadingExtra(false);
   }
 
@@ -128,6 +134,25 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
       setLearnError(String(e?.message || e));
     } finally {
       setLearnBusy(false);
+    }
+  }
+
+  async function handleRollback() {
+    setRollbackBusy(true);
+    setLearnError(null);
+    try {
+      const res = await runAgentRollback('alpha_strategist');
+      if (!res || res.error) {
+        setLearnError(res?.error || 'Rollback fallito');
+      } else {
+        setLearnResult({ status: 'rollback', results: { alpha_strategist: { status: 'ok', result: res } } });
+        await loadExtras();
+        if (fetchAgentsStatus) fetchAgentsStatus();
+      }
+    } catch (e) {
+      setLearnError(String(e?.message || e));
+    } finally {
+      setRollbackBusy(false);
     }
   }
 
@@ -221,7 +246,7 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
             <div style={{ color: COLORS.purple, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase' }}>Learning Machine v3</div>
             <h3 style={{ margin: '4px 0 6px', fontSize: 16 }}>Parametri appresi</h3>
             <div style={{ color: COLORS.muted, fontSize: 11, lineHeight: 1.5, maxWidth: 520 }}>
-              Aggiornamento controllato (max 25% per ciclo) con storico versionato. Alpha impara per posizione; APM guarda il prezzo a +5 giorni dopo ogni EXIT.
+              Aggiornamento controllato (max 25% per ciclo) + guardrail WR. Alpha impara per posizione; APM guarda +5g post EXIT.
             </div>
           </div>
           <button
@@ -276,6 +301,50 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
           </div>
 
           <div style={compactCard}>
+            <div style={{ color: COLORS.purple, fontWeight: 800, fontSize: 12, marginBottom: 8 }}>Guardrail Alpha</div>
+            {(() => {
+              const g = alphaGuardrail || {};
+              const base = g.baseline || {};
+              const drop = g.drop_pts;
+              const would = g.would_rollback;
+              const thr = g.thresholds || {};
+              const actionColor = would ? COLORS.red : drop != null && drop > 0 ? COLORS.amber : COLORS.green;
+              return (
+                <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.7 }}>
+                  <div>baseline WR: <strong style={{ color: COLORS.text }}>{base.win_rate != null ? `${base.win_rate}%` : '—'}</strong>
+                    {base.param_version != null ? ` · v${base.param_version}` : ''}</div>
+                  <div>sample baseline: <strong style={{ color: COLORS.text }}>{base.sample_count ?? '—'}</strong></div>
+                  <div>drop: <strong style={{ color: actionColor }}>{drop != null ? `${drop} pts` : '—'}</strong>
+                    {would ? ' · ROLLBACK SE ATTIVO' : ''}</div>
+                  <div style={{ fontSize: 10, marginTop: 4 }}>
+                    soglia {thr.wr_drop_pts ?? 12} pts · min {thr.min_days ?? 7}g / {thr.min_new_positions ?? 5} pos
+                  </div>
+                  {base.created_at && (
+                    <div style={{ fontSize: 10, marginTop: 2 }}>baseline: {formatDate(base.created_at)}</div>
+                  )}
+                  <button
+                    onClick={handleRollback}
+                    disabled={rollbackBusy}
+                    style={{
+                      marginTop: 10,
+                      background: rollbackBusy ? COLORS.panel2 : `${COLORS.red}22`,
+                      color: COLORS.text,
+                      border: `1px solid ${COLORS.red}55`,
+                      borderRadius: 8,
+                      padding: '7px 12px',
+                      cursor: rollbackBusy ? 'wait' : 'pointer',
+                      fontWeight: 700,
+                      fontSize: 11,
+                    }}
+                  >
+                    {rollbackBusy ? 'Rollback…' : 'Rollback manuale'}
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+
+          <div style={compactCard}>
             <div style={{ color: COLORS.amber, fontWeight: 800, fontSize: 12, marginBottom: 8 }}>Ultimo run learning</div>
             {!learnResult && !learnError && (
               <div style={{ fontSize: 11, color: COLORS.muted }}>Nessun run lanciato da questa sessione. Usa il bottone oppure il cron.</div>
@@ -290,6 +359,7 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
                     {name.replace(/_/g, ' ')}: {res.status}
                     {res.result?.win_rate != null ? ` · WR ${res.result.win_rate}%` : ''}
                     {res.result?.updated != null ? ` · upd ${String(res.result.updated)}` : ''}
+                    {res.result?.guardrail?.action ? ` · guard ${res.result.guardrail.action}` : ''}
                     {res.result?.auto_tuning ? ` · ${res.result.auto_tuning}` : ''}
                   </div>
                 ))}
@@ -336,26 +406,6 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
               </button>
             );
           })}
-          {selectedAgent && selectedAgent !== 'adaptive_position_manager' && (
-            <div style={{ ...panel, padding: 14, gridColumn: '1 / -1' }}>
-              <h3 style={{ marginTop: 0 }}>{AGENT_INFO[selectedAgent]?.name} · decisioni</h3>
-              {(agentDecisions || []).length === 0 ? (
-                <div style={{ color: COLORS.muted, fontSize: 12 }}>Nessuna decisione recente.</div>
-              ) : (
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {(agentDecisions || []).slice(0, 12).map((d) => (
-                    <div key={d._id || d.created_at} style={compactCard}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                        <strong style={{ fontSize: 12 }}>{d.type}</strong>
-                        <span style={{ color: COLORS.muted, fontSize: 10 }}>{formatDate(d.created_at)}</span>
-                      </div>
-                      <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 6 }}>{d.reasoning || JSON.stringify(d.data || {}).slice(0, 180)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -363,7 +413,6 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
             <Kpi label="Ultimo run" value={apm.status?.last_run ? formatDate(apm.status.last_run) : 'Mai'} />
-            <Kpi label="Prossimo" value={apm.status?.remaining_hours != null ? `${apm.status.remaining_hours}h` : '—'} />
             <Kpi label="Azioni 7g" value={apm.summary?.actions_taken ?? 0} color={COLORS.orange} />
             <Kpi label="Decisioni 7g" value={apm.summary?.total_decisions ?? 0} />
           </div>
@@ -377,7 +426,7 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
                 <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 6 }}>{item.reason}</div>
               </div>
             ))}
-            {!importantApm.length && <div style={{ color: COLORS.muted, fontSize: 12 }}>Nessuna azione APM rilevante negli ultimi record.</div>}
+            {!importantApm.length && <div style={{ color: COLORS.muted, fontSize: 12 }}>Nessuna azione APM rilevante.</div>}
           </div>
         </div>
       )}
@@ -391,29 +440,25 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
             <Kpi label="Risk Reject" value={riskCounts.WOULD_REJECT || 0} color={COLORS.red} />
           </div>
           <section style={{ ...panel, padding: 12, overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900, fontSize: 11 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700, fontSize: 11 }}>
               <thead>
                 <tr style={{ color: COLORS.muted, textAlign: 'left' }}>
-                  {['Ticker', 'Alpha', 'Risk', 'Piano', 'Fase', 'Prezzo', 'Motivo'].map((label) => (
+                  {['Ticker', 'Alpha', 'Risk', 'Piano'].map((label) => (
                     <th key={label} style={{ padding: '8px 7px', borderBottom: `1px solid ${COLORS.border}` }}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {maxRows.slice(0, 40).map((row) => (
+                {maxRows.slice(0, 30).map((row) => (
                   <tr key={row.ticker} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                     <td style={{ padding: 8, fontWeight: 800 }}>{row.ticker}</td>
-                    <td><Badge color={row.shadow_action === 'WOULD_BUY' ? COLORS.green : row.shadow_action === 'WOULD_ARM' ? COLORS.blue : row.shadow_action === 'WOULD_REJECT' ? COLORS.red : COLORS.amber}>{row.shadow_action}</Badge></td>
-                    <td>{row.risk ? <Badge color={row.risk.risk_shadow_decision === 'WOULD_APPROVE' ? COLORS.green : row.risk.risk_shadow_decision === 'WOULD_REDUCE' ? COLORS.amber : COLORS.red}>{row.risk.risk_shadow_decision}</Badge> : '—'}</td>
+                    <td><Badge color={row.shadow_action === 'WOULD_BUY' ? COLORS.green : row.shadow_action === 'WOULD_ARM' ? COLORS.blue : COLORS.amber}>{row.shadow_action}</Badge></td>
+                    <td>{row.risk ? <Badge color={COLORS.muted}>{row.risk.risk_shadow_decision}</Badge> : '—'}</td>
                     <td>{row.plan_status}</td>
-                    <td>{row.market_phase || '—'}</td>
-                    <td>{row.signal_price ?? '—'}</td>
-                    <td style={{ color: COLORS.muted, maxWidth: 260 }}>{(row.risk?.rejection_reasons?.length ? row.risk.rejection_reasons : row.rejection_reasons || []).join(', ') || '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!maxRows.length && <div style={{ padding: 24, textAlign: 'center', color: COLORS.muted }}>Nessun candidato Shadow disponibile.</div>}
           </section>
         </>
       )}
@@ -422,34 +467,10 @@ export default function Agents({ agentsStatus, agentsLoading, selectedAgent, set
         <section style={{ ...panel, padding: 14 }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
             {[['ACTIONABLE', 'Actionable'], ['NEAR_MISS', 'Near miss'], ['REJECTED', 'Rejected'], ['ALL', 'Tutti']].map(([key, label]) => (
-              <button key={key} onClick={() => setValidationFilter(key)} style={{ color: COLORS.text, background: validationFilter === key ? COLORS.panel2 : 'transparent', border: `1px solid ${validationFilter === key ? cohortColor(key) : COLORS.border}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>{label} {validationCohorts[key] || ''}</button>
+              <button key={key} onClick={() => setValidationFilter(key)} style={{ color: COLORS.text, background: validationFilter === key ? COLORS.panel2 : 'transparent', border: `1px solid ${validationFilter === key ? cohortColor(key) : COLORS.border}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>{label}</button>
             ))}
           </div>
-          <div style={{ color: COLORS.muted, fontSize: 11, marginBottom: 8 }}>Totale segnali: {validationSummary.total || validationSignals.length || 0}</div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900, fontSize: 10 }}>
-              <thead>
-                <tr style={{ color: COLORS.muted, textAlign: 'left' }}>
-                  {['Ticker', 'Coorte', 'Stato', 'MFE', 'MAE', 'Return 5d'].map((label) => (
-                    <th key={label} style={{ padding: '7px 6px', borderBottom: `1px solid ${COLORS.border}` }}>{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {validationRows.map((signal) => (
-                  <tr key={signal._id || signal.setup_key} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                    <td style={{ padding: 7, fontWeight: 800 }}>{signal.ticker}</td>
-                    <td><Badge color={cohortColor(signal.validation_cohort)}>{signal.validation_cohort || 'N/D'}</Badge></td>
-                    <td>{signal.status || '—'}</td>
-                    <td style={{ color: signal.outcomes?.mfe_pct != null ? COLORS.green : COLORS.muted }}>{signal.outcomes?.mfe_pct == null ? '—' : `${Number(signal.outcomes.mfe_pct).toFixed(2)}%`}</td>
-                    <td style={{ color: signal.outcomes?.mae_pct != null ? COLORS.red : COLORS.muted }}>{signal.outcomes?.mae_pct == null ? '—' : `${Number(signal.outcomes.mae_pct).toFixed(2)}%`}</td>
-                    <td style={{ color: signal.outcomes?.return_5d_pct == null ? COLORS.muted : Number(signal.outcomes.return_5d_pct) >= 0 ? COLORS.green : COLORS.red }}>{signal.outcomes?.return_5d_pct == null ? '—' : `${Number(signal.outcomes.return_5d_pct).toFixed(2)}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!validationRows.length && <div style={{ padding: 20, textAlign: 'center', color: COLORS.muted }}>Nessun record per il filtro selezionato.</div>}
-          </div>
+          <div style={{ color: COLORS.muted, fontSize: 11 }}>Totale: {validationSummary.total || validationSignals.length || 0}</div>
         </section>
       )}
     </div>
