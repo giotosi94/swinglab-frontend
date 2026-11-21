@@ -82,3 +82,15 @@ export const fetchMlPredictions = () => get('/api/ml/predict/all');
 export const fetchTrendPredictions = () => get('/api/ml/trend/all');
 export const fetchTradeHistory = (limit = 200) => get(`/api/trades/history?limit=${limit}`);
 export const fetchDailySummary = () => get('/api/trades/daily');
+
+// ─── ML Model Versioning (v3) ───────────────────────────────────────────────
+export const fetchMlStatus = () => get('/api/ml/status');
+export const fetchTrendStatus = () => get('/api/ml/trend/status');
+export const fetchMlVersions = (limit = 8) => get(`/api/ml/versions?limit=${limit}`);
+export const fetchTrendVersions = (limit = 8) => get(`/api/ml/trend/versions?limit=${limit}`);
+export const promoteMlVersion = (versionId) => post(`/api/ml/promote/${encodeURIComponent(versionId)}`);
+export const promoteTrendVersion = (versionId) => post(`/api/ml/trend/promote/${encodeURIComponent(versionId)}`);
+export const rollbackMl = () => post('/api/ml/rollback');
+export const rollbackTrend = () => post('/api/ml/trend/rollback');
+export const runMlWeeklyRetrain = (alsoTrainTrend = true) =>
+  post(`/api/ml/weekly-retrain?also_train_trend=${alsoTrainTrend}`);
